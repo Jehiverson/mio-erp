@@ -490,6 +490,10 @@ function ProductForm({
     if (!saving && !busy) onClose();
   };
   async function analyze() {
+    if (!cloud && !sample) {
+      setError('Estás en modo demo. Para analizar tus propias fotos, abre el acceso e inicia sesión. Tus fotos siguen en este formulario; también puedes continuar manualmente.');
+      return;
+    }
     if (cloud && !cloud.aiEnabled) {
       setError('La IA estará disponible en la próxima fase. Puedes continuar con el registro manual.');
       return;
@@ -630,7 +634,7 @@ function ProductForm({
             ? cloud.aiEnabled
               ? 'Carga asistida por QwenCloud · Revisa y confirma antes de crear.'
               : 'IA pendiente de la próxima fase · El registro manual está disponible.'
-            : 'Simulación de interfaz · QwenCloud aún no está conectado.'
+            : 'Modo demo · Solo se simula el producto de ejemplo; tus fotos no se analizan.'
           : 'Cada pieza tendrá un código único generado al guardar.'
       }
       onClose={safeClose}
@@ -648,12 +652,12 @@ function ProductForm({
       )}
       {step === 'source' ? (
         <div className="form-stack">
-          <Alert severity="info">
+          <Alert severity="info" action={!cloud ? <Button component="a" href="/" target="_blank" rel="noopener noreferrer" color="inherit">Abrir acceso</Button> : undefined}>
             {cloud
               ? cloud.aiEnabled
                 ? 'Al analizar se enviarán las fotos seleccionadas y estas notas a QwenCloud. No se crea un producto hasta que revises y confirmes el borrador.'
                 : 'QwenCloud no está activo. Conserva tus notas y continúa con el registro manual.'
-              : 'Explora el flujo. No se envían fotos ni datos a una IA.'}
+              : 'Estás en la demostración local. Para analizar tus fotos con QwenCloud, abre el acceso e inicia sesión. Aquí solo puedes probar el producto de ejemplo o registrar manualmente.'}
           </Alert>
           {photoEditor}
           <Field
@@ -710,7 +714,7 @@ function ProductForm({
               }
               onClick={() => void analyze()}
             >
-              {busy ? 'Preparando borrador…' : cloud ? 'Analizar con QwenCloud' : 'Ver borrador de ejemplo'}
+              {busy ? 'Preparando borrador…' : cloud ? 'Analizar con QwenCloud' : sample ? 'Ver borrador de ejemplo' : 'Análisis real: inicia sesión'}
             </Button>
           </div>
         </div>
@@ -724,7 +728,7 @@ function ProductForm({
                   : 'Registro manual. La foto no fue analizada; completa y verifica los datos antes de guardar.'
                 : sample
                   ? 'Borrador de ejemplo precargado. Revisa todos los campos antes de guardar.'
-                  : 'La foto no fue analizada. Completa los campos pendientes; el análisis real llegará con QwenCloud.'}
+                  : 'Registro manual en modo demo. Las fotos no se analizaron; completa los campos o inicia sesión para usar QwenCloud.'}
             </Alert>
           )}
           <div className="product-form-grid">

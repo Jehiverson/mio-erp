@@ -98,7 +98,7 @@ export default function App({
           MuiButton: {
             defaultProps: { disableElevation: true },
             styleOverrides: { root: { padding: '10px 18px', borderRadius: 10, whiteSpace: 'nowrap', fontWeight: 750 },
-              containedPrimary: { backgroundColor: brand.orange, color: '#123754', '&:hover': { backgroundColor: '#ec9b80' }, '&.Mui-disabled': { backgroundColor: '#e5e9ed', color: '#677785' } } },
+              containedPrimary: { backgroundColor: brand.accent, color: brand.cream, '&:hover': { backgroundColor: '#09345c' }, '&.Mui-disabled': { backgroundColor: '#e5e9ed', color: '#677785' } } },
           },
           MuiTextField: { defaultProps: { variant: 'outlined' } },
           MuiOutlinedInput: { styleOverrides: { root: { fontSize: 14, borderRadius: 9 } } },
@@ -180,7 +180,7 @@ export default function App({
       </nav>
       <div className="sidebar-bottom">
         <div className="flow-note">
-          <img className="sidebar-mascot" src={brand.mascotUrl} alt="" aria-hidden="true" />
+          <img className="sidebar-mascot" src="/images/mio/mascot-dark.png" alt="" aria-hidden="true" />
           <span className="mini-title">TODO CONECTADO</span>
           <p>
             Del primer producto
