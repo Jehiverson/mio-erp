@@ -1,0 +1,11 @@
+[
+  {
+    "origin": [
+      "https://project-97ed847a-4800-435a-b4a.web.app",
+      "https://project-97ed847a-4800-435a-b4a.firebaseapp.com"
+    ],
+    "method": ["GET"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]

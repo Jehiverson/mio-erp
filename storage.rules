@@ -1,0 +1,22 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function member(storeId) {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.active == true;
+    }
+    function editor(storeId) {
+      return member(storeId) && firestore.get(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.role in ['admin','editor'];
+    }
+    match /stores/{storeId}/uploads/{uid}/{image} {
+      allow read: if member(storeId);
+      allow create: if editor(storeId) && request.auth.uid == uid
+        && image.matches('[a-fA-F0-9-]{36}[.]jpg')
+        && request.resource.size > 0 && request.resource.size <= 1048576
+        && request.resource.contentType == 'image/jpeg';
+      allow update, delete: if false;
+    }
+    match /{allPaths=**} { allow read, write: if false; }
+  }
+}
