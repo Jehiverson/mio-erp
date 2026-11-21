@@ -71,7 +71,12 @@ export async function logout() {
   await signOut(firebaseClient().auth);
 }
 export function firebaseMessage(error: unknown) {
-  const code = (error as { code?: string })?.code || '';
+  const code =
+    (
+      error as {
+        code?: string;
+      }
+    )?.code || '';
   const known: Record<string, string> = {
     'auth/invalid-credential': 'Correo o contraseña incorrectos.',
     'auth/user-disabled': 'Esta cuenta está deshabilitada. Contacta al administrador.',
@@ -79,7 +84,8 @@ export function firebaseMessage(error: unknown) {
     'auth/network-request-failed': 'No se pudo conectar. Revisa tu conexión y reintenta.',
     'permission-denied': 'No tienes permiso para leer el inventario de esta tienda.',
     'functions/unauthenticated': 'La sesión expiró. Vuelve a entrar para guardar.',
-    'functions/permission-denied': 'Tu cuenta no tiene permiso para modificar este inventario.',
+    'functions/permission-denied': 'Tu cuenta no tiene permiso para modificar esta tienda.',
+    'functions/aborted': 'El pedido o producto cambió. Revisa los datos actualizados y vuelve a confirmar.',
     'functions/unavailable': 'No se pudo completar la solicitud. Conserva el formulario y reintenta.',
     'functions/not-found': 'La función no está disponible. Verifica su despliegue y región.',
   };

@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
+import { useCommerce, CommerceFeedback } from './commerce';
 import { Alert, Button, CircularProgress, IconButton, MenuItem, Pagination } from '@mui/material';
 import { Actions, Badge, Empty, Field, Icon, Modal, Search, Stat, readPhoto, useDemo } from './common';
 import { createProduct, currency, emptyDraft, id, type Product, type ProductDraft } from './model';
@@ -12,7 +13,7 @@ export function ProductPhoto({ p }: { p: Pick<Product, 'name' | 'photo'> }) {
   );
 }
 export default function Inventory() {
-  const { data, go, act, cloud } = useDemo();
+  const { data, go, cloud } = useDemo();
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('Todos');
   const [type, setType] = useState('Todos');
@@ -347,7 +348,7 @@ export default function Inventory() {
             </div>
           </div>
           <div className="form-actions">
-            {!cloud && detail.status === 'En revisión' && (
+            {detail.status === 'En revisión' && (!cloud || cloud.canEdit) && (
               <Button
                 onClick={() => {
                   setInspect(detail);
@@ -380,39 +381,52 @@ export default function Inventory() {
           </div>
         </Modal>
       )}
-      {inspect && (
-        <Modal
-          title="Inspeccionar producto devuelto"
-          subtitle={`${inspect.code} · ${inspect.name}`}
-          onClose={() => setInspect(null)}
-        >
-          <div className="form-stack">
-            <Alert severity="warning">
-              Confirma que recibiste la pieza y verificaste que está en condición vendible. Solo entonces
-              volverá a estar disponible.
-            </Alert>
-            <div className="form-actions">
-              <Button onClick={() => setInspect(null)}>Mantener en revisión</Button>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  if (
-                    act((d) => {
-                      const p = d.products.find((p) => p.id === inspect.id)!;
-                      if (p.status !== 'En revisión') throw new Error('La pieza ya no está en revisión.');
-                      p.status = 'Disponible';
-                    }, 'Producto inspeccionado y reintegrado.')
-                  )
-                    setInspect(null);
-                }}
-              >
-                Confirmar inspección y reintegrar
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+      {inspect && <RestockForm product={inspect} onClose={() => setInspect(null)} />}
     </>
+  );
+}
+function RestockForm({ product, onClose }: { product: Product; onClose: () => void }) {
+  const op = useCommerce(`restock.${product.id}`);
+  const close = () => {
+    if (op.canClose) onClose();
+  };
+  return (
+    <Modal
+      title="Inspeccionar producto devuelto"
+      subtitle={`${product.code} · ${product.name}`}
+      onClose={close}
+    >
+      <Alert severity="warning">
+        Confirma que recibiste la pieza y verificaste que está en condición vendible. Solo entonces volverá a
+        estar disponible.
+      </Alert>
+      <CommerceFeedback op={op} />
+      <div className="form-actions">
+        <Button disabled={!op.canClose} onClick={close}>
+          {op.pending ? 'Cerrar y verificar después' : 'Mantener en revisión'}
+        </Button>
+        <Button
+          variant="contained"
+          disabled={op.busy || op.blocked}
+          onClick={async () => {
+            if (
+              await op.run(
+                () => ({ kind: 'restock', productId: product.id }),
+                (d) => {
+                  const p = d.products.find((x) => x.id === product.id);
+                  if (!p || p.status !== 'En revisión') throw new Error('La pieza ya no está en revisión.');
+                  p.status = 'Disponible';
+                },
+                'Producto inspeccionado y reintegrado.',
+              )
+            )
+              onClose();
+          }}
+        >
+          {op.label('Confirmar inspección y reintegrar')}
+        </Button>
+      </div>
+    </Modal>
   );
 }
 function ProductForm({
@@ -440,8 +454,14 @@ function ProductForm({
   const [analyzed, setAnalyzed] = useState(false);
   const blocked = !!cloud && (!cloud.canEdit || cloud.loading || !!cloud.error);
   const [targetId] = useState(() => product?.id || id());
-  const saveOperation = useRef<{ payload: string; id: string } | null>(null);
-  const analysisOperation = useRef<{ payload: string; id: string } | null>(null);
+  const saveOperation = useRef<{
+    payload: string;
+    id: string;
+  } | null>(null);
+  const analysisOperation = useRef<{
+    payload: string;
+    id: string;
+  } | null>(null);
   const safeClose = () => {
     if (!saving && !busy) onClose();
   };
@@ -497,7 +517,6 @@ function ProductForm({
       setBusy(false);
     }
   }
-
   const update = (key: keyof ProductDraft, value: string) => setDraft((d) => ({ ...d, [key]: value }));
   async function upload(file?: File) {
     if (!file) return;
@@ -545,7 +564,6 @@ function ProductForm({
       onClose();
     else setError('Revisa los campos y vuelve a guardar.');
   }
-
   return (
     <Modal
       title={

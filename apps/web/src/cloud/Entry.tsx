@@ -2,9 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress } from '@mui/material';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { collection, doc, limit, onSnapshot, orderBy, query } from 'firebase/firestore';
-import type { StoredProduct } from '@hackaton/shared';
+import type { StoredProduct, CommerceCommand } from '@hackaton/shared';
+import { httpsCallable } from 'firebase/functions';
 import DemoApp from '../prototype/App';
-import type { Demo } from '../prototype/model';
+import type { Demo, Customer, Order } from '../prototype/model';
 import AccessScreen from './AccessScreen';
 import {
   firebaseClient,
@@ -88,6 +89,14 @@ function CloudWorkspace({ user, onDemo }: { user: User; onDemo: () => void }) {
   const [membership, setMembership] = useState<'loading' | 'allowed' | 'denied'>('loading');
   const [role, setRole] = useState('');
   const [products, setProducts] = useState<CloudProduct[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [live, setLive] = useState<Demo['live']>({
+    active: false,
+    name: 'Sin sesión activa',
+    shown: [],
+    sold: [],
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [retry, setRetry] = useState(0);
@@ -122,43 +131,93 @@ function CloudWorkspace({ user, onDemo }: { user: User; onDemo: () => void }) {
     );
   }, [user.uid, retry]);
   useEffect(() => {
-    if (membership !== 'allowed') {
-      setProducts([]);
-      return;
-    }
+    if (membership !== 'allowed') return;
     let alive = true,
       generation = 0;
+    const ready: Record<string, boolean> = { products: false, customers: false, orders: false, live: false };
+    const errors: Record<string, string> = {};
     setLoading(true);
     setError('');
-    const source = query(
-      collection(firebaseClient().db, 'stores', storeId, 'products'),
-      orderBy('createdAt', 'desc'),
-      limit(200),
-    );
-    const unsubscribe = onSnapshot(
-      source,
-      (snapshot) => {
-        const request = ++generation;
-        void Promise.all(
-          snapshot.docs.map((d) =>
-            displayProduct({ ...d.data(), id: d.id } as StoredProduct, photoCache.current),
-          ),
-        ).then((items) => {
-          if (!alive || request !== generation) return;
-          setProducts(items);
-          setLoading(false);
-          setError('');
-        });
-      },
-      (e) => {
-        setProducts([]);
-        setError(firebaseMessage(e));
-        setLoading(false);
-      },
-    );
+    const update = () => {
+      if (!alive) return;
+      setLoading(Object.values(ready).some((value) => !value));
+      setError(Object.values(errors).join(' '));
+    };
+    const fail = (name: string) => (e: unknown) => {
+      if (!alive) return;
+      ready[name] = true;
+      errors[name] =
+        `${name === 'products' ? 'Inventario' : name === 'customers' ? 'Clientes' : name === 'orders' ? 'Pedidos' : 'Live'}: ${firebaseMessage(e)}`;
+      update();
+    };
+    const source = (name: string) =>
+      query(
+        collection(firebaseClient().db, 'stores', storeId, name),
+        orderBy('createdAt', 'desc'),
+        limit(200),
+      );
+    const subscriptions = [
+      onSnapshot(
+        source('products'),
+        (snapshot) => {
+          const request = ++generation;
+          void Promise.all(
+            snapshot.docs.map((d) =>
+              displayProduct({ ...d.data(), id: d.id } as StoredProduct, photoCache.current),
+            ),
+          )
+            .then((items) => {
+              if (!alive || request !== generation) return;
+              setProducts(items);
+              ready.products = true;
+              delete errors.products;
+              update();
+            })
+            .catch(fail('products'));
+        },
+        fail('products'),
+      ),
+      onSnapshot(
+        source('customers'),
+        (snapshot) => {
+          if (!alive) return;
+          setCustomers(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Customer));
+          ready.customers = true;
+          delete errors.customers;
+          update();
+        },
+        fail('customers'),
+      ),
+      onSnapshot(
+        source('orders'),
+        (snapshot) => {
+          if (!alive) return;
+          setOrders(snapshot.docs.map((d) => ({ ...d.data(), id: d.id }) as Order));
+          ready.orders = true;
+          delete errors.orders;
+          update();
+        },
+        fail('orders'),
+      ),
+      onSnapshot(
+        doc(firebaseClient().db, 'stores', storeId, 'live', 'current'),
+        (snapshot) => {
+          if (!alive) return;
+          setLive(
+            snapshot.exists()
+              ? (snapshot.data() as Demo['live'])
+              : { active: false, name: 'Sin sesión activa', shown: [], sold: [] },
+          );
+          ready.live = true;
+          delete errors.live;
+          update();
+        },
+        fail('live'),
+      ),
+    ];
     return () => {
       alive = false;
-      unsubscribe();
+      subscriptions.forEach((stop) => stop());
     };
   }, [membership, retry]);
   if (membership === 'loading') return <Loading text="Verificando acceso a la tienda…" />;
@@ -184,9 +243,9 @@ function CloudWorkspace({ user, onDemo }: { user: User; onDemo: () => void }) {
     );
   const data: Demo = {
     products,
-    customers: [],
-    orders: [],
-    live: { active: false, name: '', shown: [], sold: [] },
+    customers,
+    orders,
+    live,
     nextProduct: 1,
     nextOrder: 1,
   };
@@ -194,6 +253,31 @@ function CloudWorkspace({ user, onDemo }: { user: User; onDemo: () => void }) {
     <DemoApp
       cloud={{
         data,
+        commerceScope: `${storeId}.${user.uid}`,
+        executeCommerce: async (command: CommerceCommand, operationId: string) => {
+          const call = httpsCallable<
+            {
+              storeId: string;
+              operationId: string;
+              command: CommerceCommand;
+            },
+            {
+              orderId?: string;
+              customerId?: string;
+              revision?: number;
+            }
+          >(firebaseClient().functions, 'executeCommerce');
+          try {
+            return (await call({ storeId, operationId, command })).data;
+          } catch (e) {
+            const code = (
+              e as {
+                code?: string;
+              }
+            ).code;
+            throw Object.assign(new Error(firebaseMessage(e)), { code });
+          }
+        },
         aiEnabled: qwenEnabled,
         loading,
         error,
@@ -206,7 +290,15 @@ function CloudWorkspace({ user, onDemo }: { user: User; onDemo: () => void }) {
           try {
             return await saveCloudProduct(draft, operation, previous as CloudProduct | undefined, targetId);
           } catch (e) {
-            throw new Error((e as { code?: string }).code ? firebaseMessage(e) : (e as Error).message);
+            throw new Error(
+              (
+                e as {
+                  code?: string;
+                }
+              ).code
+                ? firebaseMessage(e)
+                : (e as Error).message,
+            );
           }
         },
         analyzeProduct: async (text, image, operation) => {

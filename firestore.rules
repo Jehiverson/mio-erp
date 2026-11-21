@@ -4,7 +4,8 @@ service cloud.firestore {
     function member(storeId) {
       return request.auth != null
         && exists(/databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid))
-        && get(/databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.active == true;
+        && get(/databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.active == true
+        && get(/databases/$(database)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.role in ['admin','editor','viewer'];
     }
     match /stores/{storeId}/members/{uid} {
       allow get: if request.auth != null && request.auth.uid == uid;
@@ -14,6 +15,18 @@ service cloud.firestore {
       allow get, list: if member(storeId);
       // Todas las mutaciones pasan por funciones autenticadas con transacción.
       allow write: if false;
+    }
+    match /stores/{storeId}/customers/{customerId} {
+      allow get, list: if member(storeId);
+      allow write: if false;
+    }
+    match /stores/{storeId}/orders/{orderId} {
+      allow get, list: if member(storeId);
+      allow write: if false;
+    }
+    match /stores/{storeId}/live/{sessionId} {
+      allow get: if member(storeId);
+      allow list, write: if false;
     }
     match /{document=**} { allow read, write: if false; }
   }

@@ -25,7 +25,7 @@ import NiArrowHistory from '../icons/nexture/ni-arrow-history';
 import NiLayout from '../icons/nexture/ni-layout';
 import NiList from '../icons/nexture/ni-list';
 import type { Demo, Product, ProductDraft } from './model';
-import type { AiDraft } from '@hackaton/shared';
+import type { AiDraft, CommerceCommand } from '@hackaton/shared';
 export const icons = {
   store: NiStore,
   live: NiScreen,
@@ -57,6 +57,15 @@ export type DemoContextType = {
   data: Demo;
   notify: (message: string) => void;
   cloud?: {
+    commerceScope: string;
+    executeCommerce: (
+      command: CommerceCommand,
+      operationId: string,
+    ) => Promise<{
+      orderId?: string;
+      customerId?: string;
+      revision?: number;
+    }>;
     aiEnabled: boolean;
     canEdit: boolean;
     loading: boolean;
@@ -66,7 +75,9 @@ export type DemoContextType = {
       operation: string,
       previous: Product | undefined,
       targetId: string,
-    ) => Promise<{ code: string }>;
+    ) => Promise<{
+      code: string;
+    }>;
     analyzeProduct: (text: string, image: string, operation: string) => Promise<AiDraft>;
     onRetry: () => void;
   };
@@ -211,15 +222,17 @@ export function Actions({
   onClose,
   label = 'Guardar',
   disabled = false,
+  cancelLabel = 'Cancelar',
 }: {
   onClose: () => void;
   label?: string;
   disabled?: boolean;
+  cancelLabel?: string;
 }) {
   return (
     <div className="form-actions">
       <Button onClick={onClose} color="inherit">
-        Cancelar
+        {cancelLabel}
       </Button>
       <Button type="submit" variant="contained" disabled={disabled}>
         {label}

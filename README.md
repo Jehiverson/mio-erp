@@ -1,6 +1,6 @@
 # Hackaton · Inventario, live y entregas
 
-Monorepo npm workspaces. Fase 3: proyecto Firebase confirmado (project-97ed847a-4800-435a-b4a), acceso e inventario implementados; app web configurada, Authentication habilitado y Firestore/Storage privados creados en us-central1. App Check Enterprise registrado y configurado. Pendientes operador, despliegue y prueba real. QwenCloud está desactivado y su clave queda para la siguiente fase. La demo local de fase 2 se conserva separada.
+Monorepo npm workspaces. Inventario, Live, pedidos, entregas y pagos implementados para Firebase; implementación local pendiente de despliegue y prueba real. El proyecto project-97ed847a-4800-435a-b4a tiene app web, Authentication, Firestore/Storage privados en us-central1 y App Check Enterprise configurados. Falta crear operador con membresía. QwenCloud sigue desactivado y su clave está pospuesta. La demo local se conserva separada.
 
 ## Estructura
 
@@ -34,6 +34,7 @@ Las pruebas de dominio no dependen de Firebase ni de llamadas IA. El build se gu
 
 - [Conexión Firebase y QwenCloud](docs/04-firebase-qwen-fase3.md).
 - [Cierre, commit y despliegue de fase 3](docs/05-cierre-fase3.md).
+- [Live, entregas y pagos conectados](docs/06-live-entregas-pagos.md).
 - [Alcance y fases](docs/01-alcance-mvp.md).
 - [Estado y decisiones de la fase 2](docs/02-prototipo-navegable.md).
 - [Guía para probar las pantallas](docs/03-guia-prueba-fase2.md).
@@ -46,7 +47,7 @@ Los fuentes originales de la plantilla y sus manifests se conservan en apps/web.
 
 ## Límites actuales
 
-El modo demo es local, sin autenticación real ni concurrencia entre usuarios. El modo Firebase tiene integración SDK/Functions, con proyecto y app web configurados; App Check Enterprise registrado; faltan operador con membresía y despliegue validado. Las reservas/pagos simulados no son transacciones de producción. En demo la IA es simulada. En nube QwenCloud está apagado por defecto (ENABLE_QWENCLOUD=false y VITE_ENABLE_QWENCLOUD=false); sólo en la siguiente fase se activará por una función; ambos flujos requieren revisión y confirmación para crear inventario. No existe integración de redes sociales, cobro bancario o mensajería.
+El modo demo es local, sin autenticación real ni concurrencia entre usuarios. El modo Firebase usa funciones con transacciones para inventario y comercio; faltan operador con membresía, despliegue y validación real. Las pruebas locales no validan reglas ni concurrencia Firebase. Los pagos son registros manuales: no hay cargos bancarios automáticos. Las pantallas cargan los últimos 200 documentos por colección. En demo la IA es simulada. En nube QwenCloud está apagado (ENABLE_QWENCLOUD=false y VITE_ENABLE_QWENCLOUD=false). No existe integración de redes sociales ni mensajería.
 
 No guardar secretos en variables VITE_ ni en el repositorio. La clave QwenCloud se configura exclusivamente mediante el secreto QWENCLOUD_API_KEY del backend.
 
@@ -56,12 +57,6 @@ scripts/offline-bootstrap.cjs es una herramienta de recuperación usada en este 
 
 ## Commit de la fase
 
-El entorno del agente no permite escribir .git. Desde la Terminal del equipo, después de revisar la fase, el primer commit local puede crearse con:
-
-```bash
-git init -b main
-git add .
-git commit -m "feat: add MVP monorepo with Firebase inventory and QwenCloud"
-```
+Primer commit verificado: `04d22bd` — `feat: add MVP monorepo and Firebase inventory integration`, rama `main`. El árbol de trabajo estaba limpio al reanudar la fase. Los pasos siguientes de despliegue están en docs/05-cierre-fase3.md.
 
 No se ha configurado un repositorio remoto ni se ha hecho push. Los archivos .env, node_modules y dist están excluidos mediante .gitignore.

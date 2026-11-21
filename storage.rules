@@ -4,7 +4,8 @@ service firebase.storage {
     function member(storeId) {
       return request.auth != null
         && firestore.exists(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid))
-        && firestore.get(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.active == true;
+        && firestore.get(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.active == true
+        && firestore.get(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.role in ['admin','editor','viewer'];
     }
     function editor(storeId) {
       return member(storeId) && firestore.get(/databases/(default)/documents/stores/$(storeId)/members/$(request.auth.uid)).data.role in ['admin','editor'];

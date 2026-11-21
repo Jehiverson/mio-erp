@@ -7,6 +7,8 @@ import { setGlobalOptions } from 'firebase-functions/v2';
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 import {
   InputError,
+  CommerceConflict,
+  parseCommerceCommand,
   canEdit,
   operationId,
   parseAnalyze,
@@ -18,6 +20,7 @@ import {
   type AiDraft,
 } from '../../../packages/shared/src/index.js';
 import { analyzeWithQwen, QwenError } from './qwen.js';
+import { executeCommerceTransaction } from './commerce-handler.js';
 initializeApp();
 const db = getFirestore();
 const qwenEnabled = process.env.ENABLE_QWENCLOUD === 'true';
@@ -40,6 +43,7 @@ function authorized(member: Record<string, unknown> | undefined) {
 }
 function translated(error: unknown): HttpsError {
   if (error instanceof HttpsError) return error;
+  if (error instanceof CommerceConflict) return new HttpsError('aborted', error.message);
   if (error instanceof InputError) return new HttpsError('invalid-argument', error.message);
   if (error instanceof QwenError)
     return new HttpsError(
@@ -52,6 +56,17 @@ function translated(error: unknown): HttpsError {
     );
   return new HttpsError('internal', 'No se pudo completar la operación. Conserva el formulario y reintenta.');
 }
+export const executeCommerce = onCall({ enforceAppCheck: appCheck, timeoutSeconds: 30 }, async (request) => {
+  try {
+    const { uid, storeId, input } = identity(request);
+    if (Object.keys(input).some((key) => !['storeId', 'operationId', 'command'].includes(key)))
+      throw new InputError('La solicitud contiene campos no permitidos.');
+    const command = parseCommerceCommand(input.command);
+    return await executeCommerceTransaction(db, storeId, uid, operationId(input.operationId), command);
+  } catch (error) {
+    throw translated(error);
+  }
+});
 export const saveInventoryProduct = onCall(
   { enforceAppCheck: appCheck, timeoutSeconds: 30 },
   async (request) => {

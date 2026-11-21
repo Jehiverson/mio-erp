@@ -17,8 +17,14 @@ export type Product = {
   status: ProductStatus;
   queue: string[];
 };
-export type Customer = { id: string; name: string; contact: string; address: string };
+export type Customer = {
+  id: string;
+  name: string;
+  contact: string;
+  address: string;
+};
 export type Payment = {
+  operator?: string;
   id: string;
   amount: number;
   method: 'Efectivo' | 'Transferencia' | 'Contraentrega';
@@ -26,10 +32,24 @@ export type Payment = {
   at: string;
 };
 export type Order = {
+  revision?: number;
   id: string;
   code: string;
   customerId: string;
-  items: { productId: string; price: number }[];
+  customer?: {
+    name: string;
+    contact: string;
+  };
+  items: {
+    productId: string;
+    price: number;
+    snapshot?: {
+      name: string;
+      code: string;
+      size: string;
+      photoPath: string;
+    };
+  }[];
   status: 'Pendiente' | 'Enviado' | 'Entregado' | 'Devuelto';
   cod: boolean;
   payments: Payment[];
@@ -47,14 +67,23 @@ export type Demo = {
   products: Product[];
   customers: Customer[];
   orders: Order[];
-  live: { active: boolean; name: string; shown: string[]; sold: string[] };
+  live: {
+    sessionId?: string;
+    active: boolean;
+    name: string;
+    shown: string[];
+    sold: string[];
+  };
   nextProduct: number;
   nextOrder: number;
 };
 export type ProductDraft = Pick<
   Product,
   'name' | 'type' | 'brand' | 'size' | 'origin' | 'description' | 'photo'
-> & { cost: string; price: string };
+> & {
+  cost: string;
+  price: string;
+};
 export const emptyDraft: ProductDraft = {
   name: '',
   type: '',

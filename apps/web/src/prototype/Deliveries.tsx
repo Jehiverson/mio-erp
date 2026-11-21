@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useCommerce, CommerceFeedback } from './commerce';
 import {
   Alert,
   Avatar,
@@ -27,7 +28,7 @@ import {
 } from './model';
 import { ProductPhoto } from './Inventory';
 export default function Deliveries() {
-  const { data, orderId, setOrderId } = useDemo();
+  const { data, orderId, setOrderId, cloud } = useDemo();
   const [search, setSearch] = useState(''),
     [status, setStatus] = useState('Todos'),
     [payFilter, setPayFilter] = useState('Todos');
@@ -36,7 +37,9 @@ export default function Deliveries() {
     (o) =>
       (status === 'Todos' || o.status === status) &&
       (payFilter === 'Todos' || paymentLabel(o) === payFilter) &&
-      `${o.code} ${clientName(data, o.customerId)} ${o.guide}`.toLowerCase().includes(search.toLowerCase()),
+      `${o.code} ${o.customer?.name || clientName(data, o.customerId)} ${o.guide}`
+        .toLowerCase()
+        .includes(search.toLowerCase()),
   );
   const uncollected = data.orders.reduce((s, o) => s + due(o), 0);
   return (
@@ -128,7 +131,15 @@ export default function Deliveries() {
             </Field>
           </div>
         </div>
-        {orders.length ? (
+        {cloud?.loading ? (
+          <Empty title="Cargando pedidos…" description="Sincronizando entregas y pagos de la tienda." />
+        ) : cloud?.error ? (
+          <Empty
+            title="No se pudieron sincronizar los pedidos"
+            description={cloud.error}
+            action={<Button onClick={cloud.onRetry}>Reintentar</Button>}
+          />
+        ) : orders.length ? (
           <div className="table-scroll">
             <table className="data-table orders-table">
               <thead>
@@ -150,7 +161,7 @@ export default function Deliveries() {
                   <tr key={o.id}>
                     <td>
                       <button className="order-cell" onClick={() => setOrderId(o.id)}>
-                        <strong>{clientName(data, o.customerId)}</strong>
+                        <strong>{o.customer?.name || clientName(data, o.customerId)}</strong>
                         <span>
                           {o.code}
                           {o.cod ? ' · Contraentrega' : ''}
@@ -195,18 +206,27 @@ export default function Deliveries() {
           />
         )}
         <div className="pagination">
-          <span className="muted small">{orders.length} pedidos · Datos de demostración</span>
+          <span className="muted small">
+            {orders.length} pedidos · {cloud ? 'Tienda Firebase' : 'Datos de demostración'}
+          </span>
           <span className="muted small">Los pagos se registran por pedido</span>
         </div>
       </section>
-      {selected && <OrderDetail order={selected} onClose={() => setOrderId(null)} />}
+      {selected && <OrderDetail key={selected.id} order={selected} onClose={() => setOrderId(null)} />}
     </>
   );
 }
 function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const { data, act } = useDemo();
-  const [modal, setModal] = useState<'payment' | 'plan' | 'deliver' | 'return' | 'deposit' | null>(null);
-  const customer = data.customers.find((c) => c.id === o.customerId)!;
+  const { data, cloud } = useDemo();
+  const disabled = !!cloud && (!cloud.canEdit || cloud.loading || !!cloud.error);
+  const [modal, setModal] = useState<'payment' | 'plan' | 'ship' | 'deliver' | 'return' | 'deposit' | null>(
+    null,
+  );
+  const customer = o.customer ||
+    data.customers.find((c) => c.id === o.customerId) || {
+      name: 'Cliente no disponible',
+      contact: 'Consulta su identificador: ' + o.customerId,
+    };
   const progress = o.status === 'Pendiente' ? 0 : o.status === 'Enviado' ? 1 : 2;
   return (
     <>
@@ -282,6 +302,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
                 variant="contained"
                 fullWidth
                 startIcon={<Icon name="plus" />}
+                disabled={disabled}
                 onClick={() => setModal('payment')}
               >
                 Registrar pago o abono
@@ -297,7 +318,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
                 severity="info"
                 sx={{ mt: 2 }}
                 action={
-                  <Button color="inherit" onClick={() => setModal('deposit')}>
+                  <Button disabled={disabled} color="inherit" onClick={() => setModal('deposit')}>
                     Registrar
                   </Button>
                 }
@@ -313,7 +334,13 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
               <span className="muted small">{o.items.length} piezas</span>
             </div>
             {o.items.map((i) => {
-              const p = data.products.find((p) => p.id === i.productId)!;
+              const current = data.products.find((p) => p.id === i.productId);
+              const p = {
+                name: i.snapshot?.name || current?.name || 'Producto ' + i.productId,
+                code: i.snapshot?.code || current?.code || i.productId,
+                size: i.snapshot?.size || current?.size || '',
+                photo: i.snapshot && i.snapshot.photoPath !== current?.photoPath ? '' : current?.photo || '',
+              };
               return (
                 <div className="order-product" key={i.productId}>
                   <ProductPhoto p={p} />
@@ -336,7 +363,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
             <div className="row between">
               <h3>Datos de entrega</h3>
               {o.status === 'Pendiente' && (
-                <Button size="small" onClick={() => setModal('plan')}>
+                <Button disabled={disabled} size="small" onClick={() => setModal('plan')}>
                   {o.guide ? 'Editar envío' : 'Planificar envío'}
                 </Button>
               )}
@@ -388,6 +415,7 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
                         timeStyle: 'short',
                       })}
                       {p.reference ? ` · ${p.reference}` : ''}
+                      {` · Recibo ${p.id}${p.operator ? ' · ' + p.operator : ''}`}
                     </span>
                   </div>
                   <strong>{currency(p.amount)}</strong>
@@ -410,7 +438,8 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
                 variant="contained"
                 fullWidth
                 startIcon={<Icon name="truck" />}
-                onClick={() => act((d) => ship(d.orders.find((x) => x.id === o.id)!), 'Pedido despachado.')}
+                disabled={disabled}
+                onClick={() => setModal('ship')}
               >
                 Despachar pedido
               </Button>
@@ -418,11 +447,17 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
           )}
           {o.status === 'Enviado' && (
             <div className="row">
-              <Button variant="outlined" color="inherit" onClick={() => setModal('return')}>
+              <Button
+                disabled={disabled}
+                variant="outlined"
+                color="inherit"
+                onClick={() => setModal('return')}
+              >
                 Registrar devolución
               </Button>
               <Button
                 variant="contained"
+                disabled={disabled}
                 onClick={() => setModal('deliver')}
                 startIcon={<Icon name="check" />}
               >
@@ -443,10 +478,10 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
       </Drawer>
       {modal === 'payment' && <PaymentForm order={o} onClose={() => setModal(null)} />}{' '}
       {modal === 'plan' && <PlanForm order={o} onClose={() => setModal(null)} />}{' '}
-      {modal && ['deliver', 'return', 'deposit'].includes(modal) && (
+      {modal && ['ship', 'deliver', 'return', 'deposit'].includes(modal) && (
         <CloseOrder
           order={o}
-          kind={modal as 'deliver' | 'return' | 'deposit'}
+          kind={modal as 'ship' | 'deliver' | 'return' | 'deposit'}
           onClose={() => setModal(null)}
         />
       )}
@@ -454,10 +489,22 @@ function OrderDetail({ order: o, onClose }: { order: Order; onClose: () => void 
   );
 }
 function PaymentForm({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const { act } = useDemo();
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<Payment['method']>('Efectivo');
-  const [reference, setReference] = useState('');
+  const { cloud } = useDemo();
+  const op = useCommerce(`payment.${o.id}`);
+  const [initialRevision] = useState(
+    op.pending && 'expectedRevision' in op.pending.command
+      ? op.pending.command.expectedRevision
+      : o.revision || 0,
+  );
+  const stale = !!cloud && (o.revision || 0) !== initialRevision && !op.pending;
+  const locked = op.locked || op.blocked || stale;
+  const close = () => {
+    if (op.canClose) onClose();
+  };
+  const request = op.pending?.command.kind === 'recordPayment' ? op.pending.command : undefined;
+  const [amount, setAmount] = useState(request ? String(request.amount / 100) : '');
+  const [method, setMethod] = useState<Payment['method']>(request?.method || 'Efectivo');
+  const [reference, setReference] = useState(request?.reference || '');
   const [operationId] = useState(id);
   let value: number | null = null;
   try {
@@ -469,14 +516,24 @@ function PaymentForm({ order: o, onClose }: { order: Order; onClose: () => void 
     <Modal
       title="Registrar pago o abono"
       subtitle={`${o.code} · Registro manual de pago, sin cargo bancario automático.`}
-      onClose={onClose}
+      onClose={close}
     >
       <form
         className="form-stack"
-        onSubmit={(e) => {
+        noValidate={!!op.pending}
+        onSubmit={async (e) => {
           e.preventDefault();
+          if (stale && !op.pending) return;
           if (
-            act(
+            await op.run(
+              () => ({
+                kind: 'recordPayment',
+                orderId: o.id,
+                expectedRevision: initialRevision,
+                amount: cents(amount),
+                method: method as 'Efectivo' | 'Transferencia',
+                reference,
+              }),
               (d) =>
                 addPayment(d.orders.find((x) => x.id === o.id)!, {
                   id: operationId,
@@ -497,11 +554,17 @@ function PaymentForm({ order: o, onClose }: { order: Order; onClose: () => void 
         </div>
         <div className="row between">
           <h3>Monto a registrar</h3>
-          <button type="button" className="sample-link" onClick={() => setAmount(String(due(o) / 100))}>
+          <button
+            disabled={locked}
+            type="button"
+            className="sample-link"
+            onClick={() => setAmount(String(due(o) / 100))}
+          >
             Completar saldo
           </button>
         </div>
         <Field
+          disabled={locked}
           autoFocus
           label="Monto del pago (Q)"
           required
@@ -516,6 +579,7 @@ function PaymentForm({ order: o, onClose }: { order: Order; onClose: () => void 
           }
         />
         <Field
+          disabled={locked}
           label="Método de pago"
           select
           value={method}
@@ -528,6 +592,7 @@ function PaymentForm({ order: o, onClose }: { order: Order; onClose: () => void 
           ))}
         </Field>
         <Field
+          disabled={locked}
           label={method === 'Transferencia' ? 'Banco / cuenta y referencia' : 'Referencia o nota (opcional)'}
           required={method === 'Transferencia'}
           value={reference}
@@ -537,20 +602,43 @@ function PaymentForm({ order: o, onClose }: { order: Order; onClose: () => void 
           <span>Saldo después de este pago</span>
           <strong>{value !== null && value > 0 && value <= due(o) ? currency(due(o) - value) : '—'}</strong>
         </div>
-        <Actions onClose={onClose} label="Confirmar pago" />
+        {stale && (
+          <Alert severity="warning">
+            El pedido cambió. Cierra y revisa el saldo actualizado antes de registrar otro pago.
+          </Alert>
+        )}
+        <CommerceFeedback op={op} />
+        <Actions
+          cancelLabel={op.pending ? 'Cerrar y verificar después' : 'Cancelar'}
+          onClose={close}
+          label={op.label('Confirmar pago')}
+          disabled={op.busy || op.blocked || stale}
+        />
       </form>
     </Modal>
   );
 }
 function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) {
-  const { act } = useDemo();
-  const [address, setAddress] = useState(o.address),
-    [courier, setCourier] = useState(o.courier),
-    [date, setDate] = useState(o.date),
-    [guide, setGuide] = useState(o.guide),
-    [shipping, setShipping] = useState(String(o.shipping / 100)),
-    [cost, setCost] = useState(String(o.shippingCost / 100)),
-    [cod, setCod] = useState(o.cod);
+  const { cloud } = useDemo();
+  const op = useCommerce(`plan.${o.id}`);
+  const [initialRevision] = useState(
+    op.pending && 'expectedRevision' in op.pending.command
+      ? op.pending.command.expectedRevision
+      : o.revision || 0,
+  );
+  const stale = !!cloud && (o.revision || 0) !== initialRevision && !op.pending;
+  const locked = op.locked || op.blocked || stale;
+  const close = () => {
+    if (op.canClose) onClose();
+  };
+  const request = op.pending?.command.kind === 'planDelivery' ? op.pending.command : undefined;
+  const [address, setAddress] = useState(request?.address || o.address),
+    [courier, setCourier] = useState(request?.courier || o.courier),
+    [date, setDate] = useState(request?.date || o.date),
+    [guide, setGuide] = useState(request?.guide || o.guide),
+    [shipping, setShipping] = useState(String((request?.shipping ?? o.shipping) / 100)),
+    [cost, setCost] = useState(String((request?.shippingCost ?? o.shippingCost) / 100)),
+    [cod, setCod] = useState(request?.cod ?? o.cod);
   let proposedTotal: number | null = null;
   try {
     proposedTotal = o.items.reduce((sum, i) => sum + i.price, 0) + cents(shipping);
@@ -561,37 +649,55 @@ function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) 
     <Modal
       title="Planificar envío"
       subtitle={`${o.code} · Los cambios de envío actualizan el total del pedido.`}
-      onClose={onClose}
+      onClose={close}
     >
       <form
         className="form-stack"
-        onSubmit={(e) => {
+        noValidate={!!op.pending}
+        onSubmit={async (e) => {
           e.preventDefault();
+          if (stale && !op.pending) return;
           if (
-            act((d) => {
-              const order = d.orders.find((x) => x.id === o.id)!;
-              if (order.status !== 'Pendiente') throw new Error('El pedido ya no está pendiente.');
-              if (!address.trim() || !courier.trim() || !date)
-                throw new Error('Completa dirección, mensajero y fecha.');
-              const fee = cents(shipping),
-                expense = cents(cost);
-              if (paid(order) > order.items.reduce((s, i) => s + i.price, 0) + fee)
-                throw new Error('El nuevo total sería menor que los pagos registrados.');
-              Object.assign(order, {
+            await op.run(
+              () => ({
+                kind: 'planDelivery',
+                orderId: o.id,
+                expectedRevision: initialRevision,
                 address: address.trim(),
                 courier: courier.trim(),
                 date,
-                shipping: fee,
-                shippingCost: expense,
+                guide: guide.trim(),
+                shipping: cents(shipping),
+                shippingCost: cents(cost),
                 cod,
-                guide: guide.trim() || `GUIA-${date.replaceAll('-', '')}-${order.code.slice(4)}`,
-              });
-            }, 'Envío planificado.')
+              }),
+              (d) => {
+                const order = d.orders.find((x) => x.id === o.id)!;
+                if (order.status !== 'Pendiente') throw new Error('El pedido ya no está pendiente.');
+                if (!address.trim() || !courier.trim() || !date)
+                  throw new Error('Completa dirección, mensajero y fecha.');
+                const fee = cents(shipping),
+                  expense = cents(cost);
+                if (paid(order) > order.items.reduce((s, i) => s + i.price, 0) + fee)
+                  throw new Error('El nuevo total sería menor que los pagos registrados.');
+                Object.assign(order, {
+                  address: address.trim(),
+                  courier: courier.trim(),
+                  date,
+                  shipping: fee,
+                  shippingCost: expense,
+                  cod,
+                  guide: guide.trim() || `GUIA-${date.replaceAll('-', '')}-${order.code.slice(4)}`,
+                });
+              },
+              'Envío planificado.',
+            )
           )
             onClose();
         }}
       >
         <Field
+          disabled={locked}
           label="Dirección de entrega"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
@@ -601,12 +707,14 @@ function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) 
         />
         <div className="form-two">
           <Field
+            disabled={locked}
             label="Mensajero / transportista"
             required
             value={courier}
             onChange={(e) => setCourier(e.target.value)}
           />
           <Field
+            disabled={locked}
             label="Fecha de envío"
             type="date"
             required
@@ -616,6 +724,7 @@ function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) 
           />
         </div>
         <Field
+          disabled={locked}
           label="Guía externa (opcional)"
           value={guide}
           onChange={(e) => setGuide(e.target.value)}
@@ -623,6 +732,7 @@ function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) 
         />
         <div className="form-two">
           <Field
+            disabled={locked}
             label="Cobro de envío al cliente (Q)"
             required
             value={shipping}
@@ -630,6 +740,7 @@ function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) 
             inputProps={{ inputMode: 'decimal' }}
           />
           <Field
+            disabled={locked}
             label="Costo del mensajero (Q)"
             required
             value={cost}
@@ -654,14 +765,25 @@ function PlanForm({ order: o, onClose }: { order: Order; onClose: () => void }) 
           </div>
         </div>
         <FormControlLabel
-          control={<Checkbox checked={cod} onChange={(e) => setCod(e.target.checked)} />}
+          control={<Checkbox disabled={locked} checked={cod} onChange={(e) => setCod(e.target.checked)} />}
           label="Cobrar saldo contraentrega"
         />
         <Alert severity="info">
           La contraentrega permite despachar con saldo pendiente. El cobro se registra al confirmar la
           entrega.
         </Alert>
-        <Actions onClose={onClose} label="Guardar planificación" />
+        {stale && (
+          <Alert severity="warning">
+            El pedido cambió. Cierra esta ventana y revisa los datos antes de planificar.
+          </Alert>
+        )}
+        <CommerceFeedback op={op} />
+        <Actions
+          cancelLabel={op.pending ? 'Cerrar y verificar después' : 'Cancelar'}
+          onClose={close}
+          label={op.label('Guardar planificación')}
+          disabled={op.busy || op.blocked || stale}
+        />
       </form>
     </Modal>
   );
@@ -672,79 +794,150 @@ function CloseOrder({
   onClose,
 }: {
   order: Order;
-  kind: 'deliver' | 'return' | 'deposit';
+  kind: 'ship' | 'deliver' | 'return' | 'deposit';
   onClose: () => void;
 }) {
-  const { act } = useDemo();
-  const [amount, setAmount] = useState(String(due(o) / 100)),
-    [reason, setReason] = useState(''),
-    [account, setAccount] = useState(''),
-    [reference, setReference] = useState('');
+  const { cloud } = useDemo();
+  const op = useCommerce(`${kind}.${o.id}`);
+  const [initialRevision] = useState(
+    op.pending && 'expectedRevision' in op.pending.command
+      ? op.pending.command.expectedRevision
+      : o.revision || 0,
+  );
+  const stale = !!cloud && (o.revision || 0) !== initialRevision && !op.pending;
+  const locked = op.locked || op.blocked || stale;
+  const close = () => {
+    if (op.canClose) onClose();
+  };
+  const request = op.pending?.command;
+  const [amount, setAmount] = useState(
+      String((request?.kind === 'deliverOrder' ? request.collected : due(o)) / 100),
+    ),
+    [reason, setReason] = useState(request?.kind === 'returnOrder' ? request.reason : ''),
+    [account, setAccount] = useState(request?.kind === 'reconcileDeposit' ? request.account : ''),
+    [reference, setReference] = useState(request?.kind === 'reconcileDeposit' ? request.reference : '');
   const [operationId] = useState(id);
   const title =
-    kind === 'deliver'
-      ? 'Confirmar entrega'
-      : kind === 'return'
-        ? 'Registrar devolución'
-        : 'Conciliar depósito';
+    kind === 'ship'
+      ? 'Despachar pedido'
+      : kind === 'deliver'
+        ? 'Confirmar entrega'
+        : kind === 'return'
+          ? 'Registrar devolución'
+          : 'Conciliar depósito';
   return (
-    <Modal title={title} subtitle={o.code} onClose={onClose}>
+    <Modal title={title} subtitle={o.code} onClose={close}>
       <form
         className="form-stack"
-        onSubmit={(e) => {
+        noValidate={!!op.pending}
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (
-            act(
-              (d) => {
-                const order = d.orders.find((x) => x.id === o.id)!;
-                if (kind === 'deliver') {
-                  if (order.status !== 'Enviado') throw new Error('El pedido ya no está en ruta.');
-                  if (order.cod && due(order) > 0) {
-                    const collected = cents(amount);
-                    if (collected !== due(order))
-                      throw new Error('El cobro debe coincidir con el saldo pendiente.');
-                    addPayment(order, {
-                      id: operationId,
-                      amount: collected,
-                      method: 'Contraentrega',
-                      reference: 'Cobro al entregar',
-                      at: new Date().toISOString(),
-                    });
-                  }
-                  if (due(order) !== 0) throw new Error('Completa el pago antes de entregar.');
-                  order.status = 'Entregado';
-                } else if (kind === 'return') {
-                  if (order.status !== 'Enviado') throw new Error('Solo puedes devolver paquetes en ruta.');
-                  if (!reason.trim()) throw new Error('Indica el motivo de devolución.');
-                  order.status = 'Devuelto';
-                  order.reason = reason.trim();
-                  order.items.forEach((i) => {
-                    d.products.find((p) => p.id === i.productId)!.status = 'En revisión';
+          if (stale && !op.pending) return;
+          const result = await op.run(
+            () =>
+              kind === 'ship'
+                ? { kind: 'shipOrder', orderId: o.id, expectedRevision: initialRevision }
+                : kind === 'deliver'
+                  ? {
+                      kind: 'deliverOrder',
+                      orderId: o.id,
+                      expectedRevision: initialRevision,
+                      collected: o.cod && due(o) > 0 ? cents(amount) : 0,
+                    }
+                  : kind === 'return'
+                    ? {
+                        kind: 'returnOrder',
+                        orderId: o.id,
+                        expectedRevision: initialRevision,
+                        reason: reason.trim(),
+                      }
+                    : {
+                        kind: 'reconcileDeposit',
+                        orderId: o.id,
+                        expectedRevision: initialRevision,
+                        account: account.trim(),
+                        reference: reference.trim(),
+                      },
+            (d) => {
+              const order = d.orders.find((x) => x.id === o.id)!;
+              if (kind === 'ship') {
+                ship(order);
+              } else if (kind === 'deliver') {
+                if (order.status !== 'Enviado') throw new Error('El pedido ya no está en ruta.');
+                if (order.cod && due(order) > 0) {
+                  const collected = cents(amount);
+                  if (collected !== due(order))
+                    throw new Error('El cobro debe coincidir con el saldo pendiente.');
+                  addPayment(order, {
+                    id: operationId,
+                    amount: collected,
+                    method: 'Contraentrega',
+                    reference: 'Cobro al entregar',
+                    at: new Date().toISOString(),
                   });
-                } else {
-                  if (
-                    order.status !== 'Entregado' ||
-                    !order.cod ||
-                    order.deposited ||
-                    !order.payments.some((p) => p.method === 'Contraentrega' && p.amount > 0)
-                  )
-                    throw new Error('No hay depósito pendiente.');
-                  if (!account.trim() || !reference.trim()) throw new Error('Indica cuenta y referencia.');
-                  order.deposited = true;
-                  order.depositReference = `${account.trim()} · ${reference.trim()}`;
                 }
-              },
-              kind === 'deliver'
+                if (due(order) !== 0) throw new Error('Completa el pago antes de entregar.');
+                order.status = 'Entregado';
+              } else if (kind === 'return') {
+                if (order.status !== 'Enviado') throw new Error('Solo puedes devolver paquetes en ruta.');
+                if (!reason.trim()) throw new Error('Indica el motivo de devolución.');
+                order.status = 'Devuelto';
+                order.reason = reason.trim();
+                order.items.forEach((i) => {
+                  d.products.find((p) => p.id === i.productId)!.status = 'En revisión';
+                });
+              } else {
+                if (
+                  order.status !== 'Entregado' ||
+                  !order.cod ||
+                  order.deposited ||
+                  !order.payments.some((p) => p.method === 'Contraentrega' && p.amount > 0)
+                )
+                  throw new Error('No hay depósito pendiente.');
+                if (!account.trim() || !reference.trim()) throw new Error('Indica cuenta y referencia.');
+                order.deposited = true;
+                order.depositReference = `${account.trim()} · ${reference.trim()}`;
+              }
+            },
+            kind === 'ship'
+              ? 'Pedido despachado.'
+              : kind === 'deliver'
                 ? 'Entrega confirmada.'
                 : kind === 'return'
                   ? 'Devolución registrada. Productos pendientes de inspección.'
                   : 'Depósito conciliado.',
-            )
-          )
-            onClose();
+          );
+          if (result) onClose();
         }}
       >
-        {kind === 'deliver' ? (
+        {kind === 'ship' ? (
+          <>
+            <Alert severity="info">
+              Confirma el despacho del paquete completo. Una compra posterior generará otro pedido.
+            </Alert>
+            <dl className="detail-list">
+              <div>
+                <dt>Guía</dt>
+                <dd>{o.guide || 'Sin generar'}</dd>
+              </div>
+              <div>
+                <dt>Mensajero</dt>
+                <dd>{o.courier || 'Sin asignar'}</dd>
+              </div>
+              <div>
+                <dt>Destino</dt>
+                <dd>{o.address || 'Sin dirección'}</dd>
+              </div>
+              <div>
+                <dt>Saldo</dt>
+                <dd>
+                  {currency(due(o))}
+                  {o.cod ? ' · Contraentrega' : ''}
+                </dd>
+              </div>
+            </dl>
+          </>
+        ) : kind === 'deliver' ? (
           <>
             <Alert severity="info">
               {o.cod && due(o) > 0
@@ -753,6 +946,7 @@ function CloseOrder({
             </Alert>
             {o.cod && due(o) > 0 && (
               <Field
+                disabled={locked}
                 label="Monto cobrado al entregar (Q)"
                 required
                 value={amount}
@@ -769,6 +963,7 @@ function CloseOrder({
               {paid(o) > 0 ? `Quedará un reembolso pendiente de ${currency(paid(o))}.` : ''}
             </Alert>
             <Field
+              disabled={locked}
               label="Motivo de devolución"
               required
               multiline
@@ -792,12 +987,14 @@ function CloseOrder({
               </strong>
             </div>
             <Field
+              disabled={locked}
               label="Banco / cuenta destino"
               required
               value={account}
               onChange={(e) => setAccount(e.target.value)}
             />
             <Field
+              disabled={locked}
               label="Referencia de depósito"
               required
               value={reference}
@@ -805,7 +1002,18 @@ function CloseOrder({
             />
           </>
         )}
-        <Actions onClose={onClose} label={title} />
+        {stale && (
+          <Alert severity="warning">
+            El pedido cambió. Cierra y revisa nuevamente su estado antes de confirmar.
+          </Alert>
+        )}
+        <CommerceFeedback op={op} />
+        <Actions
+          cancelLabel={op.pending ? 'Cerrar y verificar después' : 'Cancelar'}
+          onClose={close}
+          label={op.label(title)}
+          disabled={op.busy || op.blocked || stale}
+        />
       </form>
     </Modal>
   );

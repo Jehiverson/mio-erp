@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useCommerce, CommerceFeedback } from './commerce';
 import { Alert, Avatar, Button, MenuItem } from '@mui/material';
 import { Actions, Badge, Empty, Field, Icon, Modal, Search, Stat, useDemo } from './common';
 import {
@@ -15,16 +16,29 @@ import {
 } from './model';
 import { ProductPhoto } from './Inventory';
 export default function Live() {
-  const { data, act, go } = useDemo();
+  const { data, go, cloud } = useDemo();
+  const op = useCommerce('live-actions');
+  const disabled = op.blocked || op.locked;
   const [selected, setSelected] = useState(
     data.products.find((p) => ['En Live', 'Reservado'].includes(p.status))?.id ||
       data.products.find((p) => p.status === 'Disponible')?.id ||
       '',
   );
   const [search, setSearch] = useState('');
-  const [customer, setCustomer] = useState('c1');
+  const [customer, setCustomer] = useState(data.customers[0]?.id || '');
+  useEffect(() => {
+    if (!data.customers.some((c) => c.id === customer)) setCustomer(data.customers[0]?.id || '');
+  }, [data.customers, customer]);
+  useEffect(() => {
+    if (!selected && data.products.length)
+      setSelected(
+        data.products.find((p) => ['En Live', 'Reservado', 'Disponible'].includes(p.status))?.id || '',
+      );
+  }, [data.products, selected]);
   const [session, setSession] = useState(false);
   const [ending, setEnding] = useState(false);
+  const [endingSession, setEndingSession] = useState('');
+  const endingChanged = !!cloud && (!data.live.active || data.live.sessionId !== endingSession);
   const [name, setName] = useState(data.live.name);
   const [confirm, setConfirm] = useState<Product | null>(null);
   const [newCustomer, setNewCustomer] = useState(false);
@@ -53,15 +67,30 @@ export default function Live() {
           <p>Presenta, reserva y convierte cada interesado en un pedido.</p>
         </div>
         {data.live.active ? (
-          <Button variant="outlined" color="inherit" onClick={() => setEnding(true)}>
+          <Button
+            disabled={disabled}
+            variant="outlined"
+            color="inherit"
+            onClick={() => {
+              setEndingSession(data.live.sessionId || '');
+              setEnding(true);
+            }}
+          >
             Finalizar live
           </Button>
         ) : (
-          <Button variant="contained" startIcon={<Icon name="live" />} onClick={() => setSession(true)}>
+          <Button
+            disabled={disabled}
+            variant="contained"
+            startIcon={<Icon name="live" />}
+            onClick={() => setSession(true)}
+          >
             Iniciar live
           </Button>
         )}
       </div>
+      <CommerceFeedback op={op} retry />
+      {cloud?.loading && <Alert severity="info">Cargando productos, clientes y pedidos…</Alert>}
       <section className="stats-grid three">
         <Stat
           label="Productos presentados"
@@ -126,9 +155,13 @@ export default function Live() {
                     <Button
                       variant="contained"
                       fullWidth
-                      disabled={!data.live.active}
+                      disabled={!data.live.active || disabled}
                       onClick={() =>
-                        act((d) => present(d, p.id), 'Producto presentado. Ya puedes agregar interesados.')
+                        void op.run(
+                          () => ({ kind: 'present', productId: p.id }),
+                          (d) => present(d, p.id),
+                          'Producto presentado. Ya puedes agregar interesados.',
+                        )
                       }
                       startIcon={<Icon name="live" />}
                     >
@@ -164,6 +197,8 @@ export default function Live() {
                   <button
                     key={x.id}
                     className={`live-product ${selected === x.id ? 'selected' : ''}`}
+                    disabled={op.locked}
+                    aria-pressed={selected === x.id}
                     onClick={() => setSelected(x.id)}
                   >
                     <ProductPhoto p={x} />
@@ -203,6 +238,7 @@ export default function Live() {
                 </div>
                 <Field
                   select
+                  disabled={disabled}
                   label="Cliente interesado"
                   value={customer}
                   onChange={(e) => setCustomer(e.target.value)}
@@ -214,14 +250,21 @@ export default function Live() {
                   ))}
                 </Field>
                 <div className="row between">
-                  <button className="sample-link" onClick={() => setNewCustomer(true)}>
+                  <button disabled={disabled} className="sample-link" onClick={() => setNewCustomer(true)}>
                     + Nuevo cliente
                   </button>
                   <Button
+                    disabled={disabled || !customer}
                     size="small"
                     variant="outlined"
                     startIcon={<Icon name="plus" size={16} />}
-                    onClick={() => act((d) => reserve(d, p.id, customer), 'Cliente agregado a la cola.')}
+                    onClick={() =>
+                      void op.run(
+                        () => ({ kind: 'reserve', productId: p.id, customerId: customer }),
+                        (d) => reserve(d, p.id, customer),
+                        'Cliente agregado a la cola.',
+                      )
+                    }
                   >
                     Agregar a cola
                   </Button>
@@ -251,10 +294,15 @@ export default function Live() {
                           <span>{i === 0 ? 'Primera prioridad' : 'En espera'}</span>
                         </div>
                         <button
+                          disabled={disabled}
                           className="text-cancel"
                           aria-label={`Cancelar reserva de ${clientName(data, cid)}`}
                           onClick={() =>
-                            act((d) => cancel(d, p.id, cid), 'Reserva cancelada. La cola se actualizó.')
+                            void op.run(
+                              () => ({ kind: 'cancelReservation', productId: p.id, customerId: cid }),
+                              (d) => cancel(d, p.id, cid),
+                              'Reserva cancelada. La cola se actualizó.',
+                            )
                           }
                         >
                           <Icon name="close" size={16} />
@@ -278,6 +326,7 @@ export default function Live() {
                     variant="contained"
                     fullWidth
                     startIcon={<Icon name="check" />}
+                    disabled={disabled}
                     onClick={() => setConfirm(p)}
                   >
                     Confirmar comprador
@@ -308,29 +357,43 @@ export default function Live() {
         <Modal
           title="Iniciar un live"
           subtitle="Organiza las ventas mientras transmites desde tu red social."
-          onClose={() => setSession(false)}
+          onClose={() => {
+            if (op.canClose) setSession(false);
+          }}
         >
           <form
             className="form-stack"
-            onSubmit={(e) => {
+            noValidate={!!op.pending}
+            onSubmit={async (e) => {
               e.preventDefault();
-              if (
-                act((d) => {
+              const result = await op.run(
+                () => ({ kind: 'startLive', name: name.trim() }),
+                (d) => {
                   if (!name.trim()) throw new Error('Escribe un nombre.');
-                  d.live = { active: true, name: name.trim(), shown: [], sold: [] };
-                }, 'Live iniciado.')
-              )
-                setSession(false);
+                  d.live = { sessionId: id(), active: true, name: name.trim(), shown: [], sold: [] };
+                },
+                'Live iniciado.',
+              );
+              if (result) setSession(false);
             }}
           >
             <Field
+              disabled={disabled}
               label="Nombre de la sesión"
               value={name}
               required
               onChange={(e) => setName(e.target.value)}
             />
             <Alert severity="info">Este panel no transmite video ni lee comentarios de redes sociales.</Alert>
-            <Actions onClose={() => setSession(false)} label="Iniciar live" />
+            <CommerceFeedback op={op} />
+            <Actions
+              cancelLabel={op.pending ? 'Cerrar y verificar después' : 'Cancelar'}
+              onClose={() => {
+                if (op.canClose) setSession(false);
+              }}
+              label={op.label('Iniciar live')}
+              disabled={op.busy || op.blocked}
+            />
           </form>
         </Modal>
       )}
@@ -338,18 +401,36 @@ export default function Live() {
         <Modal
           title="¿Finalizar el live?"
           subtitle="Las piezas presentadas sin reserva volverán a disponibles. Las reservas pendientes se conservarán para confirmarlas después."
-          onClose={() => setEnding(false)}
+          onClose={() => {
+            if (op.canClose) setEnding(false);
+          }}
         >
+          <CommerceFeedback op={op} />
+          {endingChanged && !op.pending && (
+            <Alert severity="warning">
+              La sesión cambió. Cierra esta ventana y revisa el live activo antes de finalizar.
+            </Alert>
+          )}
           <div className="form-actions">
-            <Button onClick={() => setEnding(false)}>Continuar live</Button>
+            <Button disabled={!op.canClose} onClick={() => setEnding(false)}>
+              {op.pending ? 'Cerrar y verificar después' : 'Continuar live'}
+            </Button>
             <Button
               variant="contained"
-              onClick={() => {
-                if (act(finishLive, 'Live finalizado. Las reservas pendientes se conservaron.'))
+              disabled={op.busy || op.blocked || (endingChanged && !op.pending)}
+              onClick={async () => {
+                if (endingChanged && !op.pending) return;
+                if (
+                  await op.run(
+                    () => ({ kind: 'finishLive', sessionId: endingSession }),
+                    finishLive,
+                    'Live finalizado. Las reservas pendientes se conservaron.',
+                  )
+                )
                   setEnding(false);
               }}
             >
-              Finalizar live
+              {op.label('Finalizar live')}
             </Button>
           </div>
         </Modal>
@@ -385,27 +466,47 @@ function ConfirmSale({
   onClose: () => void;
   onSold: (oid: string) => void;
 }) {
-  const { data, act } = useDemo();
-  const [price, setPrice] = useState(String(product.price / 100));
-  const cid = product.queue[0];
+  const { data, cloud } = useDemo();
+  const op = useCommerce(`sale.${product.id}`);
+  const close = () => {
+    if (op.canClose) onClose();
+  };
+  const current = data.products.find((p) => p.id === product.id);
+  const changed =
+    !!cloud &&
+    (!current ||
+      current.status !== 'Reservado' ||
+      current.queue[0] !== product.queue[0] ||
+      current.revision !== product.revision);
+  const [price, setPrice] = useState(
+    String((op.pending?.command.kind === 'confirmSale' ? op.pending.command.price : product.price) / 100),
+  );
+  const cid = op.pending?.command.kind === 'confirmSale' ? op.pending.command.customerId : product.queue[0];
   const pending = data.orders.find((o) => o.customerId === cid && o.status === 'Pendiente');
   return (
     <Modal
       title="Confirmar comprador"
       subtitle="La confirmación registra una venta. El pago se recibe en Entregas."
-      onClose={onClose}
+      onClose={close}
     >
       <form
         className="form-stack"
-        onSubmit={(e) => {
+        noValidate={!!op.pending}
+        onSubmit={async (e) => {
           e.preventDefault();
-          let oid = '';
-          if (
-            act((d) => {
-              oid = sale(d, product.id, cents(price)).id;
-            }, 'Venta confirmada.')
-          )
-            onSold(oid);
+          if (changed && !op.pending) return;
+          const result = await op.run(
+            () => ({
+              kind: 'confirmSale',
+              productId: product.id,
+              customerId: cid,
+              expectedRevision: product.revision || 0,
+              price: cents(price),
+            }),
+            (d) => ({ orderId: sale(d, product.id, cents(price)).id }),
+            'Venta confirmada.',
+          );
+          if (result?.orderId) onSold(result.orderId);
         }}
       >
         <div className="sale-summary">
@@ -418,6 +519,7 @@ function ConfirmSale({
           </div>
         </div>
         <Field
+          disabled={op.locked || op.blocked || changed}
           label="Precio final de venta (Q)"
           value={price}
           required
@@ -430,48 +532,90 @@ function ConfirmSale({
             : `Se creará un pedido para ${clientName(data, cid)}.`}{' '}
           No se registra ningún pago automáticamente.
         </Alert>
-        <Actions onClose={onClose} label="Confirmar venta" />
+        {changed && !op.pending && (
+          <Alert severity="warning">
+            La reserva cambió. Cierra esta ventana y revisa nuevamente el comprador y el precio.
+          </Alert>
+        )}
+        <CommerceFeedback op={op} />
+        <Actions
+          cancelLabel={op.pending ? 'Cerrar y verificar después' : 'Cancelar'}
+          onClose={close}
+          label={op.label('Confirmar venta')}
+          disabled={op.busy || op.blocked || (changed && !op.pending)}
+        />
       </form>
     </Modal>
   );
 }
 function CustomerForm({ onClose, onCreated }: { onClose: () => void; onCreated: (cid: string) => void }) {
-  const { act } = useDemo();
-  const [name, setName] = useState(''),
-    [contact, setContact] = useState(''),
-    [address, setAddress] = useState('');
-  function submit(e: FormEvent) {
+  const op = useCommerce('createCustomer');
+  const [customerId] = useState(id);
+  const close = () => {
+    if (op.canClose) onClose();
+  };
+  const request = op.pending?.command.kind === 'createCustomer' ? op.pending.command : undefined;
+  const [name, setName] = useState(request?.name || ''),
+    [contact, setContact] = useState(request?.contact || ''),
+    [address, setAddress] = useState(request?.address || '');
+  async function submit(e: FormEvent) {
     e.preventDefault();
-    let cid = '';
-    if (
-      act((d) => {
+    const result = await op.run(
+      () => ({
+        kind: 'createCustomer',
+        customerId,
+        name: name.trim(),
+        contact: contact.trim(),
+        address: address.trim(),
+      }),
+      (d) => {
         if (!name.trim() || !contact.trim()) throw new Error('Nombre y contacto son obligatorios.');
-        if (d.customers.some((c) => c.contact.toLowerCase().trim() === contact.toLowerCase().trim()))
+        if (d.customers.some((c) => c.contact.trim().toLowerCase() === contact.trim().toLowerCase()))
           throw new Error('Ya existe un cliente con ese contacto.');
-        cid = id();
-        d.customers.push({ id: cid, name: name.trim(), contact: contact.trim(), address: address.trim() });
-      }, 'Cliente registrado.')
-    )
-      onCreated(cid);
+        d.customers.push({
+          id: customerId,
+          name: name.trim(),
+          contact: contact.trim(),
+          address: address.trim(),
+        });
+        return { customerId };
+      },
+      'Cliente registrado.',
+    );
+    if (result?.customerId) onCreated(result.customerId);
   }
   return (
-    <Modal title="Nuevo cliente" onClose={onClose}>
-      <form className="form-stack" onSubmit={submit}>
-        <Field label="Nombre completo" required value={name} onChange={(e) => setName(e.target.value)} />
+    <Modal title="Nuevo cliente" onClose={close}>
+      <form className="form-stack" noValidate={!!op.pending} onSubmit={submit}>
         <Field
+          disabled={op.locked || op.blocked}
+          label="Nombre completo"
+          required
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <Field
+          disabled={op.locked || op.blocked}
           label="WhatsApp o usuario de red social"
           required
           value={contact}
           onChange={(e) => setContact(e.target.value)}
         />
         <Field
+          disabled={op.locked || op.blocked}
           label="Dirección de entrega"
           multiline
           minRows={2}
           value={address}
           onChange={(e) => setAddress(e.target.value)}
         />
-        <Actions onClose={onClose} label="Crear cliente" />
+        <CommerceFeedback op={op} />
+        <Actions
+          cancelLabel={op.pending ? 'Cerrar y verificar después' : 'Cancelar'}
+          onClose={close}
+          label={op.label('Crear cliente')}
+          disabled={op.busy || op.blocked}
+        />
       </form>
     </Modal>
   );

@@ -17,6 +17,7 @@ import Live from './Live';
 import Deliveries from './Deliveries';
 import './prototype.css';
 import { brand } from './brand';
+import { PendingCommercePanel } from './commerce';
 const key = 'hackaton.phase2.demo.v1';
 function load() {
   try {
@@ -38,7 +39,12 @@ function load() {
   }
   return initialDemo();
 }
-const pages: { id: Page; label: string; sub: string; icon: 'store' | 'live' | 'truck' }[] = [
+const pages: {
+  id: Page;
+  label: string;
+  sub: string;
+  icon: 'store' | 'live' | 'truck';
+}[] = [
   { id: 'inventario', label: 'Inventario', sub: 'Organiza tus productos', icon: 'store' },
   { id: 'live', label: 'Ventas live', sub: 'De la reserva al pedido', icon: 'live' },
   { id: 'entregas', label: 'Entregas y pagos', sub: 'Cada pedido, hasta el final', icon: 'truck' },
@@ -55,16 +61,25 @@ export type CloudWorkspaceProps = NonNullable<DemoContextType['cloud']> & {
   onLogout: () => void;
   onDemo: () => void;
 };
-export default function App({ cloud, onCloud }: { cloud?: CloudWorkspaceProps; onCloud?: () => void } = {}) {
+export default function App({
+  cloud,
+  onCloud,
+}: {
+  cloud?: CloudWorkspaceProps;
+  onCloud?: () => void;
+} = {}) {
   const [demoData, setData] = useState<Demo>(load);
   const data = cloud?.data || demoData;
   const current = useRef(demoData);
-  const [page, setPage] = useState<Page>(() => (cloud ? 'inventario' : hashPage()));
+  const [page, setPage] = useState<Page>(hashPage);
   const [orderId, setOrderId] = useState<string | null>(null);
   const [mobile, setMobile] = useState(false);
   const isMobile = useMediaQuery('(max-width:760px)');
   const [reset, setReset] = useState(false);
-  const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null);
+  const [notice, setNotice] = useState<{
+    text: string;
+    error: boolean;
+  } | null>(null);
   const theme = useMemo(
     () =>
       createTheme({
@@ -98,14 +113,13 @@ export default function App({ cloud, onCloud }: { cloud?: CloudWorkspaceProps; o
   }, []);
   useEffect(() => {
     const f = () => {
-      setPage(cloud ? 'inventario' : hashPage());
+      setPage(hashPage());
       setMobile(false);
     };
     window.addEventListener('hashchange', f);
     return () => window.removeEventListener('hashchange', f);
   }, []);
   const go = (p: Page, oid?: string) => {
-    if (cloud && p !== 'inventario') return;
     setPage(p);
     window.location.hash = p;
     setOrderId(oid || null);
@@ -153,17 +167,11 @@ export default function App({ cloud, onCloud }: { cloud?: CloudWorkspaceProps; o
           <button
             key={p.id}
             className={`nav-item ${p.id === page ? 'active' : ''}`}
-            disabled={!!cloud && p.id !== 'inventario'}
             onClick={() => go(p.id)}
             aria-current={p.id === page ? 'page' : undefined}
           >
             <Icon name={p.icon} size={23} />
-            <span>
-              {p.label}
-              {cloud && p.id !== 'inventario' && (
-                <small style={{ display: 'block', fontSize: 10 }}>Próxima fase</small>
-              )}
-            </span>
+            <span>{p.label}</span>
             {p.id === 'entregas' && pending > 0 && <span className="nav-count">{pending}</span>}
           </button>
         ))}
@@ -258,7 +266,7 @@ export default function App({ cloud, onCloud }: { cloud?: CloudWorkspaceProps; o
                   {cloud
                     ? cloud.emulators
                       ? 'Emuladores Firebase'
-                      : 'Firebase · Inventario'
+                      : 'Firebase · Tienda'
                     : 'Demostración local'}
                 </span>
                 <span className="top-divider" />
@@ -268,17 +276,41 @@ export default function App({ cloud, onCloud }: { cloud?: CloudWorkspaceProps; o
               </div>
             </header>
             <main id="main-content">
+              <PendingCommercePanel />
               <div className="eyebrow">TU OPERACIÓN, EN UN SOLO LUGAR</div>
+              {cloud?.loading && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Sincronizando datos de la tienda… Las operaciones están pausadas.
+                </Alert>
+              )}
+              {cloud?.error && (
+                <Alert
+                  severity="error"
+                  sx={{ mb: 2 }}
+                  action={
+                    <Button color="inherit" onClick={cloud.onRetry}>
+                      Reintentar
+                    </Button>
+                  }
+                >
+                  {cloud.error}
+                </Alert>
+              )}
+              {cloud && !cloud.canEdit && (
+                <Alert severity="info" sx={{ mb: 2 }}>
+                  Acceso de solo lectura. Puedes consultar inventario, ventas y entregas.
+                </Alert>
+              )}
               {page === 'inventario' ? <Inventory /> : page === 'live' ? <Live /> : <Deliveries />}
               <footer className="page-footer">
                 <span>
                   {cloud
-                    ? `Inventario conectado · ${cloud.storeLabel} · Últimas 200 piezas`
+                    ? `Tienda conectada · ${cloud.storeLabel} · Hasta 200 registros por módulo`
                     : 'Datos de ejemplo · Cambios guardados solo en este navegador'}
                 </span>
                 <span>
                   {cloud
-                    ? 'Live y Entregas se conectarán en las próximas fases'
+                    ? 'Datos de la tienda · IA disponible en próxima fase'
                     : 'Demo separada del inventario Firebase'}
                 </span>
               </footer>

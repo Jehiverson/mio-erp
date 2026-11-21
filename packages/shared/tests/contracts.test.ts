@@ -11,7 +11,7 @@ import {
   productCode,
   record,
   segment,
-} from '../src/index.ts';
+} from '../../../apps/functions/lib/packages/shared/src/index.js';
 
 const op = '123e4567-e89b-42d3-a456-426614174000';
 const product = {
@@ -125,7 +125,7 @@ test('borrador IA rechaza JSON de esquema incompleto, extra o importes falsos', 
 });
 
 test('fotografías sólo aceptan rutas de la misma tienda con propietario y operación válidos', async () => {
-  const { photoPathInStore } = await import('../src/index.ts');
+  const { photoPathInStore } = await import('../../../apps/functions/lib/packages/shared/src/index.js');
   assert.equal(photoPathInStore('', 'principal'), '');
   const path = `stores/principal/uploads/demo-admin/${op}.jpg`;
   assert.equal(photoPathInStore(path, 'principal'), path);

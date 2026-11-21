@@ -109,7 +109,7 @@ Realizadas: 48 pruebas unitarias aprobadas (17 de la demo, 9 de contratos, 9 de 
 
 Pendientes (no afirmar como comprobadas): navegación visual; login real; reglas Firestore/Storage ejecutadas; aislamiento entre tiendas y concurrencia en emulador; foto con CORS real; llamada real a QwenCloud; Hosting y Functions desplegados.
 
-Commit propuesto: feat: integrate Firebase inventory and QwenCloud gateway. No se creó el commit porque el entorno sigue impidiendo escribir .git.
+Primer commit verificado en main: 04d22bd — feat: add MVP monorepo and Firebase inventory integration. Despliegue y pruebas reales pendientes.
 
 Para cerrar esta fase, falta crear el operador y su membresía, desplegar reglas/funciones/web y probar inventario y fotos contra Firebase real. La clave de QwenCloud queda expresamente pospuesta. No avanzar a Live real o pagos reales hasta revisar esta integración.
 
