@@ -12,6 +12,30 @@ export function ProductPhoto({ p }: { p: Pick<Product, 'name' | 'photo'> }) {
     </span>
   );
 }
+function PhotoGallery({ photos, onChange, disabled = false }: {
+  photos: string[];
+  onChange?: (photos: string[]) => void;
+  disabled?: boolean;
+}) {
+  const [selected, setSelected] = useState(0);
+  const active = Math.min(selected, Math.max(0, photos.length - 1));
+  if (!photos.length) return null;
+  return <div className="photo-gallery">
+    <img className="gallery-main" src={photos[active]} alt={`Fotografía ${active + 1} del producto`} />
+    <div className="photo-thumbnails">
+      {photos.map((photo, index) => <div className="photo-thumbnail" key={`${index}-${photo.slice(-40)}`}>
+        <button type="button" className={active === index ? 'selected' : ''} onClick={() => setSelected(index)} aria-label={`Ver foto ${index + 1}`} aria-pressed={active === index}>
+          <img src={photo} alt={`Foto ${index + 1}`} />
+          <span>{index === 0 ? 'Portada' : index + 1}</span>
+        </button>
+        {onChange && <>
+          <button type="button" className="remove-photo" disabled={disabled} aria-label={`Quitar foto ${index + 1}`} onClick={() => onChange(photos.filter((_, i) => i !== index))}>×</button>
+          {index > 0 && <button type="button" className="photo-cover" disabled={disabled} onClick={() => onChange([photo, ...photos.filter((_, i) => i !== index)])}>Usar de portada</button>}
+        </>}
+      </div>)}
+    </div>
+  </div>;
+}
 export default function Inventory() {
   const { data, go, cloud } = useDemo();
   const [search, setSearch] = useState('');
@@ -319,7 +343,7 @@ export default function Inventory() {
           onClose={() => setDetail(null)}
         >
           <div className="product-detail">
-            <ProductPhoto p={detail} />
+            <PhotoGallery photos={(detail.photos || (detail.photo ? [detail.photo] : [])).filter(Boolean)} />
             <div>
               <Badge>{detail.status}</Badge>
               {detail.photoPath && !detail.photo && (
@@ -475,10 +499,10 @@ function ProductForm({
     setError('');
     try {
       if (cloud) {
-        const image = draft.photo.startsWith('data:image/jpeg;base64,') ? draft.photo : '';
-        const payload = JSON.stringify({ text: source, image });
+        const images = (draft.photos || (draft.photo ? [draft.photo] : [])).filter((photo) => photo.startsWith('data:image/jpeg;base64,'));
+        const payload = JSON.stringify({ text: source, images });
         if (analysisOperation.current?.payload !== payload) analysisOperation.current = { payload, id: id() };
-        const result = await cloud.analyzeProduct(source, image, analysisOperation.current.id);
+        const result = await cloud.analyzeProduct(source, images, analysisOperation.current.id);
         setDraft((d) => ({
           ...d,
           name: result.name || '',
@@ -505,8 +529,9 @@ function ProductForm({
                 price: '245',
                 description: source,
                 photo: d.photo,
+                photos: d.photos,
               }
-            : { ...emptyDraft, photo: d.photo, description: source },
+            : { ...emptyDraft, photo: d.photo, photos: d.photos, description: source },
         );
       }
       setAnalyzed(true);
@@ -517,21 +542,45 @@ function ProductForm({
       setBusy(false);
     }
   }
-  const update = (key: keyof ProductDraft, value: string) => setDraft((d) => ({ ...d, [key]: value }));
-  async function upload(file?: File) {
-    if (!file) return;
+  const photos = draft.photos || (draft.photo ? [draft.photo] : []);
+  const setPhotos = (next: string[]) => {
+    setDraft((d) => ({ ...d, photo: next[0] || '', photos: next }));
+    setSample(false);
+    setAnalyzed(false);
+  };
+  const update = (key: keyof ProductDraft, value: string) => setDraft((d) => ({ ...d, [key]: value, ...(key === 'photo' ? { photos: value ? [value] : [] } : {}) }));
+  async function upload(files: File[]) {
+    if (!files.length || reading || saving || busy) return;
     setError('');
+    if (photos.length + files.length > 6) {
+      setError('Puedes agregar hasta 6 fotos. Quita alguna antes de añadir más.');
+      return;
+    }
     setReading(true);
     try {
-      update('photo', await readPhoto(file));
-      setSample(false);
-      setAnalyzed(false);
+      const added: string[] = [];
+      for (const file of files) added.push(await readPhoto(file));
+      setPhotos([...new Set([...photos, ...added])]);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setReading(false);
     }
   }
+  const photoEditor = <div className="photo-editor">
+    <PhotoGallery photos={photos} onChange={setPhotos} disabled={saving || busy || reading || blocked} />
+    <label className="upload-zone multi-upload">
+      <Icon name="upload" size={25} />
+      <strong>{reading ? 'Preparando fotos…' : photos.length ? 'Agregar más fotos' : 'Selecciona fotos del producto'}</strong>
+      <span>{photos.length}/6 fotos · JPG, PNG o WebP · hasta 8 MB por foto</span>
+      <input disabled={saving || busy || reading || blocked || photos.length >= 6} type="file" multiple accept="image/jpeg,image/png,image/webp" aria-label="Agregar fotos del producto" onChange={(e) => {
+        const files = Array.from(e.target.files || []);
+        e.target.value = '';
+        void upload(files);
+      }} />
+    </label>
+    <p className="muted small">Agrega frente, lados, suela o etiqueta. La primera foto es la portada.</p>
+  </div>;
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
@@ -602,28 +651,11 @@ function ProductForm({
           <Alert severity="info">
             {cloud
               ? cloud.aiEnabled
-                ? 'Al analizar se enviarán esta foto y estas notas a QwenCloud. No se crea un producto hasta que revises y confirmes el borrador.'
+                ? 'Al analizar se enviarán las fotos seleccionadas y estas notas a QwenCloud. No se crea un producto hasta que revises y confirmes el borrador.'
                 : 'QwenCloud no está activo. Conserva tus notas y continúa con el registro manual.'
               : 'Explora el flujo. No se envían fotos ni datos a una IA.'}
           </Alert>
-          <label className="upload-zone">
-            {draft.photo ? (
-              <img src={draft.photo} alt="Foto seleccionada" />
-            ) : (
-              <>
-                <Icon name="upload" size={35} />
-                <strong>Selecciona una foto del producto</strong>
-                <span>JPG, PNG o WebP · hasta 8 MB</span>
-              </>
-            )}
-            <input
-              disabled={saving || busy || reading || blocked}
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              aria-label="Subir foto para borrador"
-              onChange={(e) => void upload(e.target.files?.[0])}
-            />
-          </label>
+          {photoEditor}
           <Field
             disabled={saving || busy || blocked}
             label="Descripción o notas del producto"
@@ -697,24 +729,7 @@ function ProductForm({
           )}
           <div className="product-form-grid">
             <div>
-              <label className="upload-zone review-upload">
-                {draft.photo ? (
-                  <img src={draft.photo} alt="Fotografía del producto" />
-                ) : (
-                  <>
-                    <Icon name="upload" size={32} />
-                    <strong>Agregar fotografía</strong>
-                    <span>Opcional · JPG, PNG o WebP</span>
-                  </>
-                )}
-                <input
-                  disabled={saving || busy || reading || blocked}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  aria-label="Fotografía del producto"
-                  onChange={(e) => void upload(e.target.files?.[0])}
-                />
-              </label>
+              {photoEditor}
               <p className="muted small">Código y estado Disponible se asignan al guardar.</p>
             </div>
             <div className="form-stack">

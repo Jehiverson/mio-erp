@@ -164,3 +164,13 @@ test('gateway usa monto explícito de notas, incluso si el modelo devuelve otro'
   assert.equal(result.cost, 9800);
   assert.equal(result.price, 24500);
 });
+
+test('gateway envía todos los ángulos del producto en una sola petición', async () => {
+  const images = ['data:image/jpeg;base64,/9j/', 'data:image/jpeg;base64,YWJj'];
+  await analyzeWithQwen({ ...input, image: images[0], images }, config, fake(async (_, init) => {
+    const body = JSON.parse(String(init?.body));
+    const sent = body.messages[1].content.filter((part: { type: string }) => part.type === 'image_url');
+    assert.deepEqual(sent.map((part: { image_url: { url: string } }) => part.image_url.url), images);
+    return completion(draft);
+  }));
+});

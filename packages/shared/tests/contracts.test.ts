@@ -139,3 +139,21 @@ test('fotografías sólo aceptan rutas de la misma tienda con propietario y oper
   ])
     assert.throws(() => photoPathInStore(value, 'principal'), InputError);
 });
+
+test('galería admite hasta seis fotos, conserva portada y rechaza duplicados o portada distinta', () => {
+  const paths = Array.from({ length: 6 }, (_, i) => `stores/principal/uploads/editor/${i}.jpg`);
+  const parsed = parseProduct({ ...product, photoPath: paths[0], photoPaths: paths });
+  assert.deepEqual(parsed.photoPaths, paths);
+  assert.equal(parsed.photoPath, paths[0]);
+  assert.throws(() => parseProduct({ ...product, photoPath: paths[0], photoPaths: [...paths, 'extra.jpg'] }), InputError);
+  assert.throws(() => parseProduct({ ...product, photoPath: paths[0], photoPaths: [paths[0], paths[0]] }), InputError);
+  assert.throws(() => parseProduct({ ...product, photoPath: paths[0], photoPaths: [paths[1]] }), InputError);
+  assert.deepEqual(parseProduct({ ...product, photoPaths: [] }).photoPaths, []);
+});
+test('análisis acepta varios JPEG, limita la cantidad y valida cada foto y la portada', () => {
+  const images = ['data:image/jpeg;base64,/9j/', 'data:image/jpeg;base64,YWJj'];
+  assert.deepEqual(parseAnalyze({ operationId: op, text: '', image: images[0], images }).images, images);
+  for (const invalid of [Array(7).fill(images[0]), [images[0], 'https://example.invalid/photo.jpg'], [images[0], 'data:image/png;base64,YWJj']])
+    assert.throws(() => parseAnalyze({ operationId: op, text: '', image: images[0], images: invalid }), InputError);
+  assert.throws(() => parseAnalyze({ operationId: op, text: '', image: images[1], images }), InputError);
+});

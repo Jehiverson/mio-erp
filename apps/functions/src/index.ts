@@ -81,9 +81,9 @@ export const saveInventoryProduct = onCall(
       const store = db.collection('stores').doc(storeId);
       const memberRef = store.collection('members').doc(uid);
       authorized((await memberRef.get()).data());
-      if (fields.photoPath) {
-        photoPathInStore(fields.photoPath, storeId);
-        const [meta] = await getStorage().bucket(productBucket.value()).file(fields.photoPath).getMetadata();
+      for (const path of fields.photoPaths || (fields.photoPath ? [fields.photoPath] : [])) {
+        photoPathInStore(path, storeId);
+        const [meta] = await getStorage().bucket(productBucket.value()).file(path).getMetadata();
         if (meta.contentType !== 'image/jpeg' || Number(meta.size) <= 0 || Number(meta.size) > 1_048_576)
           throw new InputError('La fotografía no es un JPEG válido de hasta 1 MB.');
       }
@@ -172,7 +172,7 @@ export const analyzeInventoryProduct = onCall(
       const day = new Date().toISOString().slice(0, 10);
       const storeQuota = store.collection('aiUsage').doc(day);
       const userQuota = store.collection('aiUsage').doc(`${day}_${uid}`);
-      const fingerprint = sha({ text: analysis.text, image: analysis.image });
+      const fingerprint = sha({ text: analysis.text, image: analysis.image, ...(analysis.images ? { images: analysis.images } : {}) });
       lease = randomUUID();
       const now = Date.now();
       const cached = await db.runTransaction(async (tx) => {

@@ -34,9 +34,10 @@ export default function AccessScreen({ missing, loading, error, onLogin, onDemo 
     () =>
       createTheme({
         palette: {
-          primary: { main: brand.accent },
-          background: { default: '#f7f7fa', paper: '#ffffff' },
-          text: { primary: '#292735', secondary: '#756b7e' },
+          primary: { main: brand.accent, contrastText: brand.cream },
+          secondary: { main: brand.orange, contrastText: '#182e40' },
+          background: { default: brand.cream, paper: '#ffffff' },
+          text: { primary: brand.ink, secondary: brand.muted },
         },
         typography: {
           fontFamily: '"Mulish", "Avenir Next", Arial, sans-serif',
@@ -92,7 +93,7 @@ export default function AccessScreen({ missing, loading, error, onLogin, onDemo 
           <Box
             component="section"
             aria-label="Tu espacio de trabajo"
-            sx={{ p: { xs: 3, sm: 4.5 }, bgcolor: brand.accentSoft }}
+            sx={{ p: { xs: 3, sm: 4.5 }, bgcolor: brand.accent, color: brand.cream, position: 'relative', overflow: 'hidden' }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: { xs: 3, md: 8 } }}>
               <Box
@@ -109,27 +110,31 @@ export default function AccessScreen({ missing, loading, error, onLogin, onDemo 
                 }}
               >
                 {brand.logoUrl ? (
-                  <img src={brand.logoUrl} alt="" width="29" height="29" />
+                  <img src={brand.logoUrl} alt="" width="36" height="36" style={{ objectFit: 'contain' }} />
                 ) : (
                   <NiStore size={27} />
                 )}
               </Box>
               <Box sx={{ minWidth: 0, overflowWrap: 'anywhere' }}>
                 <Typography sx={{ fontSize: 22, fontWeight: 750, lineHeight: 1.3 }}>{brand.name}</Typography>
-                <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.3 }}>
+                <Typography sx={{ fontSize: 12, color: brand.cream, mt: 0.3 }}>
                   {brand.subtitle}
                 </Typography>
               </Box>
             </Box>
             <Typography
               component="h2"
-              sx={{ fontSize: { xs: 27, md: 34 }, fontWeight: 750, lineHeight: 1.25, mb: 2 }}
+              sx={{ fontSize: { xs: 27, md: 34 }, fontWeight: 750, lineHeight: 1.25, mb: 2, color: brand.cream }}
             >
               Del primer producto a la última entrega.
             </Typography>
-            <Typography sx={{ fontSize: 14, color: 'text.secondary', lineHeight: 1.8 }}>
+            <Typography sx={{ fontSize: 14, color: brand.cream, lineHeight: 1.8 }}>
               Inventario, ventas live y entregas en un mismo espacio para tu equipo.
             </Typography>
+            <Box sx={{ mt: 3, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ width: 45, height: 7, borderRadius: 4, bgcolor: brand.orange, mb: 2 }} />
+              <Box component="img" src={brand.mascotUrl} alt="Mascota de Mio" sx={{ width: { xs: 110, md: 180 }, height: { xs: 120, md: 195 }, objectFit: 'contain' }} />
+            </Box>
           </Box>
 
           <Box component="section" aria-labelledby="access-title" sx={{ p: { xs: 3, sm: 4.5 } }}>

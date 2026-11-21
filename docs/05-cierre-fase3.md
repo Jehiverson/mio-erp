@@ -67,10 +67,12 @@ firebase deploy --only firestore,storage --project project-97ed847a-4800-435a-b4
 
 Storage consulta membresías en Firestore. Si Firebase solicita habilitar esa integración, revisar la solicitud para el servicio de Storage de este proyecto; no sustituir las reglas por acceso abierto.
 
-Después desplegar exclusivamente las tres funciones de este MVP, sin --force:
+Después desplegar las tres funciones de este MVP una por una, sin --force. El primer aprovisionamiento del bucket de fuentes de Google puede devolver HTTP 409 si varias funciones intentan crearlo simultáneamente:
 
 ```bash
-firebase deploy --only functions:hackaton:saveInventoryProduct,functions:hackaton:analyzeInventoryProduct,functions:hackaton:executeCommerce --project project-97ed847a-4800-435a-b4a --account skepcodegt@gmail.com
+firebase deploy --only functions:hackaton:saveInventoryProduct --project project-97ed847a-4800-435a-b4a --account skepcodegt@gmail.com
+firebase deploy --only functions:hackaton:executeCommerce --project project-97ed847a-4800-435a-b4a --account skepcodegt@gmail.com
+firebase deploy --only functions:hackaton:analyzeInventoryProduct --project project-97ed847a-4800-435a-b4a --account skepcodegt@gmail.com
 ```
 
 Los parámetros locales están en apps/functions/.env.project-97ed847a-4800-435a-b4a. ENABLE_QWENCLOUD=false: no es necesario crear ni proporcionar un secreto de QwenCloud. Si aparece un error de despliegue, conservar su mensaje y resolverlo antes de publicar Hosting.

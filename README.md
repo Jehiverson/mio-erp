@@ -1,4 +1,4 @@
-# Hackaton · Inventario, live y entregas
+# Mio · Inventario, live y entregas
 
 Monorepo npm workspaces. Inventario, Live, pedidos, entregas y pagos implementados para Firebase; implementación local pendiente de despliegue y prueba real. El proyecto project-97ed847a-4800-435a-b4a tiene app web, Authentication, Firestore/Storage privados en us-central1 y App Check Enterprise configurados. Falta crear operador con membresía. QwenCloud sigue desactivado y su clave está pospuesta. La demo local se conserva separada.
 
@@ -41,7 +41,7 @@ Las pruebas de dominio no dependen de Firebase ni de llamadas IA. El build se gu
 
 ## Identidad y plantilla
 
-La identidad provisional está centralizada en apps/web/src/prototype/brand.ts. El catálogo de ejemplo utiliza figuras artesanales para corresponder con las fotografías incluidas en Gogo; también se pueden registrar ropa y otros tipos de producto.
+La identidad Mio (azul #0c4376, crema #fffbe7 y naranja #ed6a4f) está centralizada en apps/web/src/prototype/brand.ts. El catálogo de ejemplo utiliza figuras artesanales para corresponder con las fotografías incluidas en Gogo; también se pueden registrar ropa y otros tipos de producto.
 
 Los fuentes originales de la plantilla y sus manifests se conservan en apps/web. El prototipo activo está aislado en src/prototype y usa MUI 5.18 / Vite 5.4 disponibles en la caché local, pues las versiones 9.4 / 8.3 del starter no estaban disponibles sin red. Se utiliza una fuente de sistema de respaldo mientras no estén instalados Mulish/Urbanist. No se ha completado una migración del starter entero a estas versiones.
 

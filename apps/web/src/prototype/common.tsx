@@ -78,7 +78,7 @@ export type DemoContextType = {
     ) => Promise<{
       code: string;
     }>;
-    analyzeProduct: (text: string, image: string, operation: string) => Promise<AiDraft>;
+    analyzeProduct: (text: string, images: string[], operation: string) => Promise<AiDraft>;
     onRetry: () => void;
   };
   act: (fn: (d: Demo) => void, message?: string) => boolean;

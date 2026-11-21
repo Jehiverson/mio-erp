@@ -33,7 +33,8 @@ export async function analyzeWithQwen(
   const content: Record<string, unknown>[] = [
     { type: 'text', text: input.text || 'Describe solo lo que puede verificarse en esta foto.' },
   ];
-  if (input.image) content.push({ type: 'image_url', image_url: { url: input.image } });
+  for (const image of input.images || (input.image ? [input.image] : []))
+    content.push({ type: 'image_url', image_url: { url: image } });
   let response: Response;
   try {
     response = await fetcher(endpoint, {

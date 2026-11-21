@@ -69,8 +69,8 @@ try {
     'El build de despliegue debe tener emuladores desactivados.',
   );
   expect(
-    web.VITE_ENABLE_QWENCLOUD === 'false' && backend.ENABLE_QWENCLOUD === 'false',
-    'QwenCloud debe continuar desactivado en ambos lados.',
+    ['true', 'false'].includes(web.VITE_ENABLE_QWENCLOUD) && web.VITE_ENABLE_QWENCLOUD === backend.ENABLE_QWENCLOUD,
+    'QwenCloud debe tener el mismo estado válido en web y backend.',
   );
   expect(
     backend.PRODUCT_STORAGE_BUCKET === web.VITE_FIREBASE_STORAGE_BUCKET,
@@ -110,6 +110,6 @@ if (failures.length) {
   for (const failure of failures) console.error(`ERROR: ${failure}`);
   process.exitCode = 1;
 } else {
-  console.log('Configuración local de fase 3 correcta. QwenCloud desactivado.');
+  console.log('Configuración local de despliegue correcta.');
   console.log('No verifica credenciales, membresías, reglas publicadas ni servicios remotos.');
 }

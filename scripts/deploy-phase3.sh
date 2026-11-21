@@ -26,7 +26,8 @@ gcloud storage buckets describe "$phase3_bucket" \
   --account="$phase3_account" --format='json(cors_config)' > "$phase3_cors_file"
 node - "$phase3_cors_file" <<'NODE'
 const fs = require('node:fs');
-const actual = JSON.parse(fs.readFileSync(process.argv[2], 'utf8')).cors_config || [];
+const actual = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))?.cors_config ?? [];
+if (!Array.isArray(actual)) throw new Error('La consulta CORS no devolvió una lista válida. No se modificó el bucket.');
 const expected = JSON.parse(fs.readFileSync('cors.firebase.json', 'utf8'));
 function canonical(rules) {
   return JSON.stringify(rules.map((rule) => ({
@@ -44,14 +45,17 @@ NODE
 
 firebase deploy --only firestore,storage \
   --project "$phase3_project" --account "$phase3_account"
-firebase deploy \
-  --only functions:hackaton:saveInventoryProduct,functions:hackaton:analyzeInventoryProduct,functions:hackaton:executeCommerce \
-  --project "$phase3_project" --account "$phase3_account"
+# El primer despliegue comparte un bucket de fuentes administrado por Google.
+# Crear en serie evita competir por su aprovisionamiento inicial (HTTP 409).
+for phase3_function in saveInventoryProduct executeCommerce analyzeInventoryProduct; do
+  firebase deploy --only "functions:hackaton:${phase3_function}" \
+    --project "$phase3_project" --account "$phase3_account"
+done
 gcloud storage buckets update "$phase3_bucket" \
   --cors-file=cors.firebase.json --account="$phase3_account"
 firebase deploy --only hosting \
   --project "$phase3_project" --account "$phase3_account"
 
-echo 'Despliegue completado. QwenCloud sigue desactivado.'
+echo 'Despliegue completado.'
 echo "Abrir https://${phase3_project}.web.app"
 echo 'Pendiente validar usuario/membresía y probar inventario/fotos contra Firebase.'

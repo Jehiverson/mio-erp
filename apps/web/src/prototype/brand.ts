@@ -1,8 +1,14 @@
-// Identidad provisional. Cambiar estos valores cuando se definan nombre, logo y colores.
+// Identidad de Mio compartida por acceso, navegación y paneles.
 export const brand = {
-  name: 'Mi tienda',
+  name: 'Mio',
   subtitle: 'Panel de ventas',
-  accent: '#6d56c4',
-  accentSoft: '#f0ecfa',
-  logoUrl: '',
+  accent: '#0c4376',
+  accentSoft: '#e7eef4',
+  canvas: '#f3f5f7',
+  cream: '#fffbe7',
+  orange: '#f2ad95',
+  ink: '#123754',
+  muted: '#52697b',
+  logoUrl: '/images/mio/mascot-white.png',
+  mascotUrl: '/images/mio/mascot-white.png',
 };

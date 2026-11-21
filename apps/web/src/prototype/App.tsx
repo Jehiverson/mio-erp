@@ -84,9 +84,10 @@ export default function App({
     () =>
       createTheme({
         palette: {
-          primary: { main: brand.accent },
-          background: { default: '#f7f7fa', paper: '#fff' },
-          text: { primary: '#292735', secondary: '#807d8d' },
+          primary: { main: brand.accent, contrastText: brand.cream },
+          secondary: { main: brand.orange, contrastText: '#182e40' },
+          background: { default: brand.canvas, paper: '#fff' },
+          text: { primary: brand.ink, secondary: brand.muted },
         },
         typography: {
           fontFamily: '"Mulish", "Avenir Next", Arial, sans-serif',
@@ -96,7 +97,8 @@ export default function App({
         components: {
           MuiButton: {
             defaultProps: { disableElevation: true },
-            styleOverrides: { root: { padding: '10px 18px', borderRadius: 9, whiteSpace: 'nowrap' } },
+            styleOverrides: { root: { padding: '10px 18px', borderRadius: 10, whiteSpace: 'nowrap', fontWeight: 750 },
+              containedPrimary: { backgroundColor: brand.orange, color: '#123754', '&:hover': { backgroundColor: '#ec9b80' }, '&.Mui-disabled': { backgroundColor: '#e5e9ed', color: '#677785' } } },
           },
           MuiTextField: { defaultProps: { variant: 'outlined' } },
           MuiOutlinedInput: { styleOverrides: { root: { fontSize: 14, borderRadius: 9 } } },
@@ -151,7 +153,7 @@ export default function App({
       <a className="brand" href="#inventario" onClick={() => go('inventario')}>
         <span className="brand-symbol">
           {brand.logoUrl ? (
-            <img src={brand.logoUrl} alt={brand.name} width="29" height="29" />
+            <img src={brand.logoUrl} alt={brand.name} width="36" height="36" style={{ objectFit: 'contain' }} />
           ) : (
             <Icon name="store" size={27} />
           )}
@@ -178,6 +180,7 @@ export default function App({
       </nav>
       <div className="sidebar-bottom">
         <div className="flow-note">
+          <img className="sidebar-mascot" src={brand.mascotUrl} alt="" aria-hidden="true" />
           <span className="mini-title">TODO CONECTADO</span>
           <p>
             Del primer producto
@@ -208,7 +211,7 @@ export default function App({
           </button>
         )}
         <div className="sidebar-profile">
-          <Avatar sx={{ width: 34, height: 34, bgcolor: '#eee9f9', color: '#6d56c4', fontSize: 12 }}>
+          <Avatar sx={{ width: 34, height: 34, bgcolor: brand.accentSoft, color: brand.accent, fontSize: 12 }}>
             AD
           </Avatar>
           <div>
@@ -270,7 +273,7 @@ export default function App({
                     : 'Demostración local'}
                 </span>
                 <span className="top-divider" />
-                <Avatar sx={{ width: 34, height: 34, fontSize: 12, bgcolor: '#ede8f8', color: '#6d56c4' }}>
+                <Avatar sx={{ width: 34, height: 34, fontSize: 12, bgcolor: brand.accentSoft, color: brand.accent }}>
                   AD
                 </Avatar>
               </div>

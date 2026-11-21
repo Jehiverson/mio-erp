@@ -274,3 +274,16 @@ test('depósito COD requiere cobro real del mensajero, no sólo modalidad COD', 
   collected.deposited = true;
   assert.equal(codDepositPending(collected), false);
 });
+
+test('galería conserva fotos al guardar y recargar; cambiar portada y quitar una no afecta identidad', () => {
+  const d = initialDemo();
+  const photos = ['data:image/jpeg;base64,YQ==', 'data:image/jpeg;base64,Yg==', 'data:image/jpeg;base64,Yw=='];
+  const p = createProduct(d, { ...draft, photo: photos[0], photos });
+  const restored = JSON.parse(JSON.stringify(d)) as Demo;
+  assert.deepEqual(restored.products[0].photos, photos);
+  createProduct(restored, { ...draft, photo: photos[2], photos: [photos[2], photos[0]] }, p.id);
+  assert.equal(restored.products[0].photo, photos[2]);
+  assert.deepEqual(restored.products[0].photos, [photos[2], photos[0]]);
+  assert.equal(restored.products[0].code, p.code);
+  assert.equal(restored.nextProduct, d.nextProduct);
+});

@@ -3,6 +3,8 @@ export type ProductStatus = 'Disponible' | 'En Live' | 'Reservado' | 'Vendido' |
 export type Product = {
   revision?: number;
   photoPath?: string;
+  photoPaths?: string[];
+  photos?: string[];
   id: string;
   code: string;
   name: string;
@@ -83,6 +85,7 @@ export type ProductDraft = Pick<
 > & {
   cost: string;
   price: string;
+  photos?: string[];
 };
 export const emptyDraft: ProductDraft = {
   name: '',
@@ -150,7 +153,7 @@ export function initialDemo(): Demo {
     origin: 'Nacional',
     cost: Math.round(prices[i] * 0.4),
     price: prices[i],
-    description: 'Pieza artesanal de madera con acabado natural. Fotografía de ejemplo incluida en Gogo.',
+    description: 'Pieza artesanal de madera con acabado natural. Fotografía de ejemplo de Mio.',
     photo: `/images/products/product-${i + 1}.jpg`,
     status: i >= 7 ? 'Vendido' : 'Disponible',
     queue: [],

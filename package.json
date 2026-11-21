@@ -11,13 +11,17 @@
     "dev": "npm run dev --workspace @hackaton/web",
     "build": "npm run build --workspace @hackaton/functions && npm run build --workspace @hackaton/web",
     "preview": "npm run preview --workspace @hackaton/web",
-    "test": "npm run build --workspace @hackaton/functions && node --experimental-strip-types --test apps/web/tests/prototype.test.ts packages/shared/tests/*.test.ts apps/functions/tests/*.test.ts",
+    "test": "npm run build --workspace @hackaton/functions && node --experimental-strip-types --test apps/web/tests/prototype.test.ts apps/web/tests/firebase-startup.test.ts packages/shared/tests/*.test.ts apps/functions/tests/*.test.ts",
     "check:phase3": "node scripts/check-phase3.cjs",
     "emulators": "npm run build --workspace @hackaton/functions && firebase emulators:start --project demo-hackaton --only auth,firestore,storage,functions",
     "seed:emulators": "node scripts/seed-emulators.cjs"
   },
   "devDependencies": {
-    "typescript": "5.9.3",
-    "@types/node": "25.9.3"
+    "@firebase/app": "0.13.2",
+    "@types/node": "25.9.3",
+    "typescript": "5.9.3"
+  },
+  "overrides": {
+    "@firebase/app": "0.13.2"
   }
 }

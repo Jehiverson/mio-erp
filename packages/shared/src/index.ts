@@ -12,6 +12,7 @@ export type ProductFields = {
   price: number;
   description: string;
   photoPath: string;
+  photoPaths?: string[];
 };
 export type StoredProduct = ProductFields & {
   id: string;
@@ -33,7 +34,7 @@ export type AiDraft = {
   price: number | null;
   description: string | null;
 };
-export type AnalyzeInput = { operationId: string; text: string; image: string };
+export type AnalyzeInput = { operationId: string; text: string; image: string; images?: string[] };
 function text(value: unknown, label: string, max: number, required = false) {
   if (typeof value !== 'string' || value.length > max || (required && !value.trim()))
     throw new InputError(`${label}: completa un texto válido de hasta ${max} caracteres.`);
@@ -41,7 +42,7 @@ function text(value: unknown, label: string, max: number, required = false) {
 }
 export function parseProduct(value: unknown): ProductFields {
   const v = record(value);
-  const keys = ['name', 'type', 'brand', 'size', 'origin', 'cost', 'price', 'description', 'photoPath'];
+  const keys = ['name', 'type', 'brand', 'size', 'origin', 'cost', 'price', 'description', 'photoPath', 'photoPaths'];
   if (Object.keys(v).some((k) => !keys.includes(k)))
     throw new InputError('El producto contiene campos no permitidos.');
   const type = text(v.type, 'Tipo', 40, true),
@@ -51,7 +52,16 @@ export function parseProduct(value: unknown): ProductFields {
     !productOrigins.includes(origin as (typeof productOrigins)[number])
   )
     throw new InputError('Tipo o procedencia fuera del catálogo.');
+  let photoPaths: string[] | undefined;
+  if (v.photoPaths !== undefined) {
+    if (!Array.isArray(v.photoPaths) || v.photoPaths.length > 6)
+      throw new InputError('Puedes guardar hasta 6 fotografías por producto.');
+    photoPaths = v.photoPaths.map((p) => text(p, 'Fotografía', 400, true));
+    if (new Set(photoPaths).size !== photoPaths.length || (photoPaths[0] || '') !== v.photoPath)
+      throw new InputError('La portada debe coincidir con la primera fotografía, sin duplicados.');
+  }
   return {
+    ...(photoPaths === undefined ? {} : { photoPaths }),
     name: text(v.name, 'Nombre', 100, true),
     type,
     brand: text(v.brand, 'Marca', 80),
@@ -83,8 +93,19 @@ export function parseAnalyze(value: unknown): AnalyzeInput {
     if (!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(image) || image.length > 1_400_000)
       throw new InputError('La imagen debe ser JPEG y pesar como máximo 1 MB.');
   }
+  let images: string[] | undefined;
+  if (v.images !== undefined) {
+    if (!Array.isArray(v.images) || v.images.length > 6)
+      throw new InputError('Puedes analizar hasta 6 fotografías.');
+    images = v.images.map((item) => {
+      if (typeof item !== 'string' || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(item) || item.length > 1_400_000)
+        throw new InputError('Cada imagen debe ser JPEG y pesar como máximo 1 MB.');
+      return item;
+    });
+    if ((images[0] || '') !== image) throw new InputError('La portada del análisis no coincide.');
+  }
   if (!notes && !image) throw new InputError('Agrega una foto o notas del producto.');
-  return { operationId: op, text: notes, image };
+  return { operationId: op, text: notes, image, ...(images === undefined ? {} : { images }) };
 }
 export function parseAiDraft(value: unknown): AiDraft {
   const v = record(value);
